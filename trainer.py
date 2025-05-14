@@ -3,40 +3,11 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import numpy as np
 import os
+import yaml
 
 from dataset import IsotropicTurbulenceDataset
 import utils
 from model_simple import Model_base
-
-# Define a configuration class
-class Config:
-    class Data:
-        dt = 0.1
-        grid_size = 64  
-        seed = 1234
-        crop = "crop"
-        field = "vorticity"
-        norm = True
-        shuffle = True
-        size = 10
-
-    class Model:
-        ch = 64
-        out_ch = 3
-        ch_mult = [1, 2, 4]
-        num_res_blocks = 2
-        attn_resolutions = []
-        dropout = 0.1
-        in_channels = 3
-        resamp_with_conv = True
-
-    class Training:
-        epochs = 10
-        batch_size = 5
-        learning_rate = 1e-4
-        divergence_loss_weight = 1e-3
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Define the training function
 def train_flow_matching(config):
@@ -172,8 +143,10 @@ def train_flow_matching(config):
 
 if __name__ == "__main__":
     # Load the configuration
-    config = Config()
     print("Loading config...")
+    with open("configs/config_file.yml", "r") as f:
+        config = yaml.safe_load(f)
+    config = utils.dict2namespace(config)
     print(config.device)
 
     # Train the model
