@@ -208,7 +208,7 @@ class Model_base(nn.Module):
         attn_resolutions = config.Model.attn_resolutions
         dropout = config.Model.dropout
         in_channels = config.Model.in_channels
-        resolution = config.Data.image_size
+        resolution = config.Data.grid_size
         resamp_with_conv = config.Model.resamp_with_conv
 
         self.ch = ch

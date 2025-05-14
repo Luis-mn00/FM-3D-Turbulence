@@ -15,6 +15,8 @@ class IsotropicTurbulenceDataset:
         
         # First 3 channels are velocity, next one is pressure
         self.data = torch.load(f'data/data_{self.crop}_{dt}_{grid_size}.pt', weights_only=False)
+        if isinstance(self.data, np.ndarray):
+            self.data = torch.from_numpy(self.data)
         self.N_time, self.N_channels, self.Nx, self.Ny, self.Nz = self.data.shape
         print(f"N_time: {self.N_time}, N_channels: {self.N_channels}, Nx: {self.Nx}, Ny: {self.Ny}, Nz: {self.Nz}")
 
@@ -83,6 +85,9 @@ class IsotropicTurbulenceDataset:
                 self.vorticity = self.vorticity[:self.size]
             if self.vorticity_magnitude is not None:
                 self.vorticity_magnitude = self.vorticity_magnitude[:self.size]
+
+    def __len__(self):
+        return self.N_time
 
 
 

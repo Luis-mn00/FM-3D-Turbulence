@@ -1,29 +1,24 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset, random_split
-from model_simple import Model_base
+from torch.utils.data import DataLoader
 import numpy as np
+import os
 
-# Define a simple dataset class
-class FlowDataset(Dataset):
-    def __init__(self, data_path):
-        self.data = torch.load(data_path, weights_only=False)
-        # Only consider the first 3 channels
-        self.data = self.data[:, :3, :, :, :]
-        print(self.data.shape)  # Print the shape of the loaded data
-
-    def __len__(self):
-        return self.data.shape[0]
-
-    def __getitem__(self, idx):
-        return self.data[idx]
+from dataset import IsotropicTurbulenceDataset
+import utils
+from model_simple import Model_base
 
 # Define a configuration class
 class Config:
     class Data:
-        path = 'data_0.1_64.pt'
-        image_size = 64  # Set the resolution of the input data
+        dt = 0.1
+        grid_size = 64  
+        seed = 1234
+        crop = "crop"
+        field = "vorticity"
+        norm = True
+        shuffle = True
+        size = 10
 
     class Model:
         ch = 64
@@ -33,32 +28,22 @@ class Config:
         attn_resolutions = []
         dropout = 0.1
         in_channels = 3
-        save_path = 'model_pinn.pth'
         resamp_with_conv = True
 
     class Training:
-        epochs = 100
+        epochs = 10
         batch_size = 5
         learning_rate = 1e-4
-        divergence_loss_weight = 0.1
+        divergence_loss_weight = 1e-3
 
-    #device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    device = "cpu"
-    
-def physical_loss(x1_pred): # CAMBIAR dim
-    vx, vy, vz = x1_pred[:, 0:1], x1_pred[:, 1:2], x1_pred[:, 2:3]
-    dvx_dx = torch.gradient(vx, dim=2)[0]
-    dvy_dy = torch.gradient(vy, dim=3)[0]
-    dvz_dz = torch.gradient(vz, dim=4)[0]  
-    divergence = dvx_dx + dvy_dy + dvz_dz
-    divergence_loss = torch.mean(divergence ** 2)
-    
-    return divergence_loss
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Define the training function
 def train_flow_matching(config):
     # Load the dataset
-    dataset = FlowDataset(config.Data.path)
+    print("Loading dataset...")
+    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
+    velocity = dataset.velocity
 
     # Define the dataset split ratios
     train_ratio = 0.8
@@ -69,11 +54,19 @@ def train_flow_matching(config):
     val_size = int(val_ratio * total_size)
     test_size = total_size - train_size - val_size
 
-    # Split the dataset
-    train_dataset, val_dataset, test_dataset = random_split(dataset, [train_size, val_size, test_size])
+    # Split the dataset randomly with config.Data.seed
+    indices = np.arange(total_size)
+    np.random.seed(config.Data.seed)
+    np.random.shuffle(indices)
+    train_indices = indices[:train_size]
+    val_indices = indices[train_size:train_size + val_size]
+    test_indices = indices[train_size + val_size:]
+    train_dataset = torch.utils.data.Subset(velocity, train_indices)
+    val_dataset = torch.utils.data.Subset(velocity, val_indices)
+    test_dataset = torch.utils.data.Subset(velocity, test_indices)
 
     # Update the dataloaders
-    train_loader = DataLoader(train_dataset, batch_size=config.Training.batch_size, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=config.Training.batch_size, shuffle=False)
     val_loader = DataLoader(val_dataset, batch_size=config.Training.batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=config.Training.batch_size, shuffle=False)
 
@@ -84,10 +77,22 @@ def train_flow_matching(config):
     # Define the optimizer
     optimizer = optim.Adam(model.parameters(), lr=config.Training.learning_rate)
 
+    # Find the next run directory
+    runs_dir = "runs"
+    existing = [d for d in os.listdir(runs_dir) if d.isdigit()]
+    if existing:
+        next_run = f"{max([int(d) for d in existing])+1:03d}"
+    else:
+        next_run = "001"
+    run_dir = os.path.join(runs_dir, next_run)
+    os.makedirs(run_dir, exist_ok=True)
+
     # Training loop with validation loss
+    print("Starting training...")
     for epoch in range(config.Training.epochs):
         model.train()
         epoch_loss = 0.0
+        mse_loss = 0.0
 
         # Get the next batch from the train_loader
         for batch_idx, x1 in enumerate(train_loader):
@@ -118,7 +123,8 @@ def train_flow_matching(config):
             loss = ((target - pred) ** 2).mean()
 
             # Compute the divergence-free loss
-            divergence_loss = physical_loss(x1_pred)
+            divergence = utils.compute_divergence(x1_pred)
+            divergence_loss = torch.mean(divergence ** 2)
 
             # Combine the flow matching loss and the divergence-free loss
             total_loss = loss + config.Training.divergence_loss_weight * divergence_loss
@@ -129,6 +135,9 @@ def train_flow_matching(config):
             optimizer.step()
 
             epoch_loss += total_loss.item()
+            mse_loss += loss.item()
+            
+        mse_loss /= len(train_loader)
 
         # Validation loss
         model.eval()
@@ -152,16 +161,20 @@ def train_flow_matching(config):
 
         val_loss /= len(val_loader)
 
-        # Log the epoch loss and validation loss
-        print(f"Epoch [{epoch + 1}/{config.Training.epochs}], Loss: {epoch_loss / len(train_loader):.4f}, Validation Loss: {val_loss:.4f}")
+        # Save checkpoint every 10 epochs
+        if (epoch + 1) % 10 == 0:
+            checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{mse_loss:.4f}_{val_loss:.4f}.pth")
+            torch.save(model.state_dict(), checkpoint_path)
+            print(f"Saved checkpoint: {checkpoint_path}")
 
-    # Save the trained model
-    torch.save(model.state_dict(), config.Model.save_path)
-    print(f"Model saved to {config.Model.save_path}")
+        # Log the epoch loss and validation loss
+        print(f"Epoch [{epoch + 1}/{config.Training.epochs}], Loss: {mse_loss:.4f}, Validation Loss: {val_loss:.4f}")
 
 if __name__ == "__main__":
     # Load the configuration
     config = Config()
+    print("Loading config...")
+    print(config.device)
 
     # Train the model
     train_flow_matching(config)
