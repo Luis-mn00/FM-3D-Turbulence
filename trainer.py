@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset, random_split
-from model import Model_base
+from model_simple import Model_base
 import numpy as np
 
 # Define a simple dataset class

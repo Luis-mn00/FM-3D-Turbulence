@@ -1,5 +1,5 @@
 # Highly inspired in https://github.com/BaratiLab/Diffusion-based-Fluid-Super-resolution
-# Baseline model without diffusion
+# Generalization to 3D
 
 import math
 import torch

@@ -1,5 +1,5 @@
 import torch
-from model import Model_base
+from model_simple import Model_base
 import matplotlib.pyplot as plt
 import os
 
