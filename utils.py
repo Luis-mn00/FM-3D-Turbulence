@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+import torch
+import numpy as np
 
 class StdScaler(object):
     def __init__(self, mean, std):
@@ -25,7 +27,7 @@ def compute_statistics(data):
     std = data.std(axis=(0,2,3,4))
     return mean, std
     
-def plot_slice(data, snapshot_idx, channel_idx, slice_idx):
+def plot_slice(data, snapshot_idx, channel_idx, slice_idx, name=None):
     """
     Plot a slice of the data at a specific snapshot and channel.
     
@@ -49,6 +51,36 @@ def plot_slice(data, snapshot_idx, channel_idx, slice_idx):
     plt.ylabel('Y-axis')
 
     # Save the plot instead of showing it
-    output_file = f'generated_plots/snapshot_{snapshot_idx}_channel_{channel_idx}_slice_{slice_idx}.png'
+    if name is None:
+        output_file = f'generated_plots/snapshot_{snapshot_idx}_channel_{channel_idx}_slice_{slice_idx}.png'
+    else:
+        output_file = f'generated_plots/{name}.png'
     plt.savefig(output_file)
     print(f'Plot saved as {output_file}')
+
+def compute_divergence(velocity):
+    assert velocity.shape[1] == 3, "Velocity must have 3 channels (vx, vy, vz)"
+    # Pad for central differences (replicate boundary)
+    def central_diff(f, dim):
+        # f: (batch, Nx, Ny, Nz)
+        pad = [0, 0, 0, 0, 0, 0]  # [z0, z1, y0, y1, x0, x1]
+        pad[2 * (2 - dim) + 1] = 1  # after
+        pad[2 * (2 - dim)] = 1      # before
+        f_pad = torch.nn.functional.pad(f, pad, mode='replicate')
+        # Central difference
+        slices_before = [slice(None)] * 4
+        slices_after = [slice(None)] * 4
+        slices_before[dim+1] = slice(0, -2)
+        slices_after[dim+1] = slice(2, None)
+        return (f_pad[tuple(slices_after)] - f_pad[tuple(slices_before)]) / 2.0
+
+    vx = velocity[:, 0]
+    vy = velocity[:, 1]
+    vz = velocity[:, 2]
+
+    dvx_dx = central_diff(vx, 0)
+    dvy_dy = central_diff(vy, 1)
+    dvz_dz = central_diff(vz, 2)
+
+    divergence = dvx_dx + dvy_dy + dvz_dz
+    return divergence
