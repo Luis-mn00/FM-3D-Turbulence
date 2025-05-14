@@ -1,0 +1,20 @@
+training.log
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore data files
+*.pt
+
+# Ignore model files
+*.pth
+
+# Ignore virtual environments
+venv/
+.env/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
