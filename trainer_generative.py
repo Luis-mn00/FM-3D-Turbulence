@@ -265,7 +265,7 @@ def train_flow_matching(config):
 if __name__ == "__main__":
     # Load the configuration
     print("Loading config...")
-    with open("configs/config_file.yml", "r") as f:
+    with open("configs/config_generative.yml", "r") as f:
         config = yaml.safe_load(f)
     config = utils.dict2namespace(config)
     print(config.device)
