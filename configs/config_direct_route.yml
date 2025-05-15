@@ -1,6 +1,7 @@
 Data:
   dt: 0.1
-  grid_size: 64
+  grid_size_lr: 64
+  grid_size: 128
   seed: 1234
   crop: "crop"
   field: "vorticity"
@@ -20,9 +21,9 @@ Model:
   save_path: "runs/006/epoch_10_0.9957_1.1559.pth"
 
 Training:
-  method: "ConFIG"
+  method: "std"
   epochs: 10
-  batch_size: 5
+  batch_size: 1
   learning_rate: 1e-4
   divergence_loss_weight: 1e-3
   sigma_min: 0.01

@@ -95,3 +95,13 @@ def compute_divergence(velocity):
 
     divergence = dvx_dx + dvy_dy + dvz_dz
     return divergence
+
+def upsample(data_lr, factor=2):
+    data_lr = data_lr.float()
+    N_time, N_channels, D, H, W = data_lr.shape
+    data_lr_reshaped = data_lr.view(N_time * N_channels, 1, D, H, W)
+    data_lr_upsampled = torch.nn.functional.interpolate(data_lr_reshaped, size=(D*factor, H*factor, W*factor), mode='nearest')
+    velocity_lr_to_hr = data_lr_upsampled.view(N_time, N_channels, D*factor, H*factor, W*factor)
+    print(f"velocity_lr upsampled to: {velocity_lr_to_hr.shape}")
+    
+    return velocity_lr_to_hr
