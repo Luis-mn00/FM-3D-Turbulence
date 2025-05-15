@@ -1,10 +1,13 @@
 import torch
-from model_simple import Model_base
 import matplotlib.pyplot as plt
 import os
 import yaml
+import numpy as np
+from scipy.stats import wasserstein_distance_nd
 
+from dataset import IsotropicTurbulenceDataset
 import utils
+from model_simple import Model_base
 
 # Create a folder to save plots
 plot_folder = "generated_plots"
@@ -87,20 +90,64 @@ def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
     return x
 
 # Generate samples using the denoising model
-def generate_samples_with_denoiser(model, num_samples, t_start, reverse_steps, T):
+def generate_samples_with_denoiser(config, model, num_samples, t_start, reverse_steps, T):
     # Get the linear beta schedule
     betas, alphas_cumprod = get_linear_beta_schedule(T)
 
     samples = []
     for _ in range(num_samples):
         # Ensure the input tensor is in float format to match the model's parameters
-        x = torch.randn((1, model.config.model.in_channels, model.config.data.image_size, model.config.data.image_size), device=model.config.device).float()
+        x = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
         
         # Perform denoising using DDIM
         sample = ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod)
         samples.append(sample.cpu().detach())
         
     return samples
+
+def residual_of_generated(samples, samples_gt, config):
+    rmse_loss = np.zeros(len(samples))
+    for i in range(len(samples)):
+        print("Batch", i)
+        # Ensure all tensors are on the same device
+        sample = samples[i].to(config.device)
+        res, = utils.compute_divergence(sample)
+        rmse_loss[i] = torch.sqrt(torch.mean(res**2))
+    
+    test_residuals = []
+    for i in range(len(samples)):
+        sample_gt = samples_gt[i].to(config.device)
+        sample_gt = sample_gt.unsqueeze(0)
+        res_gt, = utils.compute_divergence(sample_gt)
+        test_residuals.append(torch.sqrt(torch.mean(res_gt**2)))
+        
+    print(f"L2 residual: {np.mean(rmse_loss):.2f} +/- {np.std(rmse_loss):.2f}") 
+    print(f"Residual difference: {np.mean(rmse_loss - test_residuals)} +/- {np.std(rmse_loss - test_residuals)}")
+
+    # Compute L2 norm of the difference between samples and ground truth
+    l2_diff_norms = []
+    for i in range(len(samples)):
+        y = samples_gt[i]  # Ground truth sample
+        y_pred = samples[i]  # Retrieve saved y_pred
+        l2_diff_norm = torch.sqrt(torch.mean((y - y_pred) ** 2)).item()
+        l2_diff_norms.append(l2_diff_norm)
+
+    print(f"Mean L2 difference between generated samples and ground truth: {np.mean(l2_diff_norms)} +/- {np.std(l2_diff_norms)}")
+
+def test_wasserstein(samples, samples_gt, config):
+    wasserstein_distances = []
+    for i in range(len(samples)):
+        y = samples_gt[i]  # Ground truth sample, shape (N_channel, D, D, D)
+        y_pred = samples[i].squeeze(0)  # shape (N_channel, D, D, D)
+        distance = 0.0
+        for c in range(y.shape[0]):
+            distance += wasserstein_distance_nd(y[c], y_pred[c])
+        wasserstein_distances.append(distance)
+
+    # Calculate mean and std of Wasserstein distances
+    mean_wasserstein = np.mean(wasserstein_distances)
+    std_wasserstein = np.std(wasserstein_distances)
+    print(f"Wasserstein distance: {mean_wasserstein:.4f} +/- {std_wasserstein:.4f}")
 
 if __name__ == "__main__":
     # Load the configuration
@@ -117,13 +164,42 @@ if __name__ == "__main__":
     # Generate samples using ODE integration
     print("Generating samples...")
     num_samples = 1
-    samples = integrate_ode_and_sample(config, model, num_samples=num_samples)
+    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
+    velocity = dataset.velocity
+
+    # Define the dataset split ratios
+    train_ratio = 0.8
+    val_ratio = 0.1
+
+    total_size = len(dataset)
+    train_size = int(train_ratio * total_size)
+    val_size = int(val_ratio * total_size)
+    test_size = total_size - train_size - val_size
+
+    # Split the dataset randomly with config.Data.seed
+    indices = np.arange(total_size)
+    np.random.seed(config.Data.seed)
+    np.random.shuffle(indices)
+    train_indices = indices[:train_size]
+    val_indices = indices[train_size:train_size + val_size]
+    test_indices = indices[train_size + val_size:]
+    train_dataset = torch.utils.data.Subset(velocity, train_indices)
+    val_dataset = torch.utils.data.Subset(velocity, val_indices)
+    test_dataset = torch.utils.data.Subset(velocity, test_indices)
     
-    for i, sample in enumerate(samples):
+    # Just take the first num_samples from the test dataset
+    samples_gt = test_dataset[0:num_samples]
+    
+    samples_fm = integrate_ode_and_sample(config, model, num_samples=num_samples)
+    for i, sample in enumerate(samples_fm):
         utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
         
     # Generate samples using the denoising model
-    samples = generate_samples_with_denoiser(model, num_samples, t_start=1000, reverse_steps=100, T=1000)
-    
-    for i, sample in enumerate(samples):
+    samples_ddim = generate_samples_with_denoiser(config, model, num_samples, t_start=1000, reverse_steps=20, T=1000)
+    for i, sample in enumerate(samples_ddim):
         utils.plot_slice(sample, 0, 1, 63, f"generated_sample_diff_{i}")
+        
+    residual_of_generated(samples_fm, samples_gt, config)
+    test_wasserstein(samples_fm, samples_gt, config)
+    residual_of_generated(samples_ddim, samples_gt, config)
+    test_wasserstein(samples_ddim, samples_gt, config)

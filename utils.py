@@ -2,6 +2,9 @@ import matplotlib.pyplot as plt
 import torch
 import numpy as np
 import argparse
+import random
+from scipy.interpolate import griddata
+from LSIM.distance_model import DistanceModel
 
 def dict2namespace(config):
     namespace = argparse.Namespace()
@@ -68,6 +71,31 @@ def plot_slice(data, snapshot_idx, channel_idx, slice_idx, name=None):
         output_file = f'generated_plots/{name}.png'
     plt.savefig(output_file)
     print(f'Plot saved as {output_file}')
+    
+def plot_2d_comparison(low_res, high_res, gt, filename):
+    plt.figure(figsize=(10, 10))
+
+    plt.subplot(1, 3, 1)
+    plt.title("Low-Resolution Input")
+    plt.imshow(low_res, cmap="inferno")
+    plt.axis('off')
+
+    plt.subplot(1, 3, 2)
+    plt.title("Super-Resolved Output")
+    plt.imshow(high_res, cmap="inferno")
+    plt.axis('off')
+
+    plt.subplot(1, 3, 3)
+    plt.title("Ground truth")
+    plt.imshow(gt, cmap="inferno")
+    plt.axis('off')
+
+    # Save the plot as a PNG file
+    plt.tight_layout()
+    filename = f"generated_plots/{filename}.png"
+    plt.savefig(filename)
+    plt.close()
+    print(f"Plot saved in {filename}")
 
 def compute_divergence(velocity):
     assert velocity.shape[1] == 3, "Velocity must have 3 channels (vx, vy, vz)"
@@ -105,3 +133,164 @@ def upsample(data_lr, factor=2):
     print(f"velocity_lr upsampled to: {velocity_lr_to_hr.shape}")
     
     return velocity_lr_to_hr
+
+def interpolate_points(image, perc=0, ids=None, method="nearest"):
+    # Support both 2D and 3D images
+    if image.ndim == 2:
+        Nx, Ny = image.shape
+        if ids is None:
+            sampled_ids = random.sample(range(Nx * Ny), int(Nx * Ny * perc))
+        else:
+            sampled_ids = ids
+        vals = np.tile(image.reshape(Nx * Ny)[sampled_ids], 9)
+        ids = [[(x // Ny), (x % Ny)] for x in sampled_ids] + \
+              [[(x // Ny), Ny + (x % Ny)] for x in sampled_ids] + \
+              [[(x // Ny), 2*Ny + (x % Ny)] for x in sampled_ids] + \
+              [[Nx + (x // Ny), (x % Ny)] for x in sampled_ids] + \
+              [[Nx + (x // Ny), Ny + (x % Ny)] for x in sampled_ids] + \
+              [[Nx + (x // Ny), 2*Ny + (x % Ny)] for x in sampled_ids] + \
+              [[2*Nx + (x // Ny), (x % Ny)] for x in sampled_ids] + \
+              [[2*Nx + (x // Ny), Ny + (x % Ny)] for x in sampled_ids] + \
+              [[2*Nx + (x // Ny), 2*Ny + (x % Ny)] for x in sampled_ids]
+        grid_x, grid_y = np.mgrid[0:Nx*3, 0:Ny*3]
+        grid_z = griddata(ids, vals, (grid_x, grid_y), method=method, fill_value=0)
+        return torch.tensor(grid_z[Nx:Nx*2, Ny:Ny*2])
+    elif image.ndim == 3:
+        Nx, Ny, Nz = image.shape
+        if ids is None:
+            sampled_ids = random.sample(range(Nx * Ny * Nz), int(Nx * Ny * Nz * perc))
+        else:
+            sampled_ids = ids
+        # Get the (x, y, z) coordinates for sampled indices
+        coords = np.array([(idx // (Ny*Nz), (idx % (Ny*Nz)) // Nz, idx % Nz) for idx in sampled_ids])
+        vals = image.reshape(-1)[sampled_ids]
+        # Interpolate onto a dense grid
+        grid_x, grid_y, grid_z = np.mgrid[0:Nx, 0:Ny, 0:Nz]
+        interp = griddata(coords, vals, (grid_x, grid_y, grid_z), method=method, fill_value=0)
+        return torch.tensor(interp)
+    else:
+        raise ValueError("Input image must be 2D or 3D.")
+
+def interpolate_dataset(dataset, perc, method="nearest"):
+    X_vals = dataset.cpu().clone() if type(dataset) is torch.Tensor else dataset.copy()
+    n_samples = dataset.shape[0]
+    n_channels = dataset.shape[1]
+    dims = dataset.shape[2:]
+    n_points = int(np.prod(dims) * perc)
+    sampled_ids = np.zeros((n_samples, n_points), dtype=np.int32)
+
+    for i in range(n_samples):
+        if i % 100 == 0:
+            print(f"Interpolating sample {i} of {n_samples}")
+        sampled_ids[i] = np.array(random.sample(range(np.prod(dims)), n_points))
+        for c in range(n_channels):
+            X_vals[i, c] = interpolate_points(X_vals[i, c], perc=perc, ids=sampled_ids[i], method=method)
+    return X_vals, sampled_ids
+
+
+lsim_model = DistanceModel(baseType="lsim", isTrain=False, useGPU=False)
+lsim_model.load("LSIM/LSiM.pth")
+def LSiM_distance(A, B):
+    # https://github.com/tum-pbs/LSIM
+    # Expected input sizes: [1, 3, 256, 256], [3, 256, 256]  or [256,256]
+    assert len(A.shape) == len(B.shape)
+    global lsim_model
+
+    # Handle 5D input: (batch, channels, Nx, Ny, Nz)
+    if len(A.shape) == 5:
+        # Assume batch size 1 for generative inference
+        assert A.shape[0] == 1 and B.shape[0] == 1, "Batch size > 1 not supported for 3D LSiM_distance."
+        n_channels = A.shape[1]
+        Nx, Ny, Nz = A.shape[2:]
+        total_dist = 0.0
+        for z in range(Nz):
+            # For each z-slice, shape (channels, Nx, Ny)
+            A_slice = A[0, :, :, :, z]
+            B_slice = B[0, :, :, :, z]
+            total_dist += LSiM_distance(A_slice, B_slice)
+        return total_dist
+
+    if len(A.shape) == 4:
+        A = A[0]
+        B = B[0]
+
+    if A.shape[0] == 3:
+        return np.mean([
+            LSiM_distance(A[0], B[0]),
+            LSiM_distance(A[1], B[1]),
+            LSiM_distance(A[2], B[2])
+        ])
+
+    if len(A.shape) == 2:
+        A = A.unsqueeze(-1)
+    if len(B.shape) == 2:
+        B = B.unsqueeze(-1)
+    A = A.cpu() if type(A) is torch.Tensor else A
+    B = B.cpu() if type(B) is torch.Tensor else B
+    dist = lsim_model.computeDistance(A, B)
+    return dist[0]
+
+def diffuse_mask(value_ids, A=1, sig=0.044, search_dist=-1, N=256, Nx=256, Ny=256, Nz=None, tol=1e-6):
+    """
+    Create a 2D or 3D diffuse mask with Gaussian spread around value_ids.
+    If Nz is None, defaults to 2D (Nx, Ny). If Nz is given, mask is 3D (Nx, Ny, Nz).
+    """
+    L = 2 * np.pi
+    dx = L / Nx
+    dy = L / Ny
+    if Nz is not None:
+        dz = L / Nz
+        grid = np.zeros((Nx, Ny, Nz))
+        # Set boundaries to 1
+        grid[0, :, :] = 1
+        grid[-1, :, :] = 1
+        grid[:, 0, :] = 1
+        grid[:, -1, :] = 1
+        grid[:, :, 0] = 1
+        grid[:, :, -1] = 1
+
+        def gauss3d(x0, y0, z0, x, y, z):
+            return A * np.exp(-((x0 - x)**2 + (y0 - y)**2 + (z0 - z)**2) / (2 * sig**2))
+
+        if search_dist < 0:
+            min_search_steps = 0
+            while gauss3d(0, 0, 0, dx*min_search_steps, 0, 0) > tol:
+                min_search_steps += 1
+            search_dist = min_search_steps
+
+        S = search_dist * 2 + 1
+        gaussian = np.zeros((S, S, S))
+        x0 = y0 = z0 = search_dist * dx
+        for i in range(S):
+            for j in range(S):
+                for k in range(S):
+                    gaussian[i, j, k] = gauss3d(x0, y0, z0, i*dx, j*dy, k*dz)
+
+        for sid in value_ids:
+            i = sid // (Ny * Nz)
+            j = (sid % (Ny * Nz)) // Nz
+            k = sid % Nz
+
+            ilb = max(0, i - search_dist)
+            iub = min(Nx, i + search_dist + 1)
+            jlb = max(0, j - search_dist)
+            jub = min(Ny, j + search_dist + 1)
+            klb = max(0, k - search_dist)
+            kub = min(Nz, k + search_dist + 1)
+
+            gilb = max(0, search_dist - i)
+            giub = S - max(0, i + search_dist - (Nx - 1))
+            gjlb = max(0, search_dist - j)
+            gjub = S - max(0, j + search_dist - (Ny - 1))
+            gklb = max(0, search_dist - k)
+            gkub = S - max(0, k + search_dist - (Nz - 1))
+
+            grid[ilb:iub, jlb:jub, klb:kub] = np.fmax(
+                gaussian[gilb:giub, gjlb:gjub, gklb:gkub],
+                grid[ilb:iub, jlb:jub, klb:kub]
+            )
+        return grid
+    else:
+        # ...existing 2D code...
+        # (leave your current 2D implementation here)
+        pass
