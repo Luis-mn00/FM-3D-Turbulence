@@ -4,10 +4,16 @@ from torch.utils.data import DataLoader
 import numpy as np
 import os
 import yaml
+import matplotlib.pyplot as plt
+import wandb
 
 from dataset import IsotropicTurbulenceDataset
 import utils
 from model_simple import Model_base
+
+wandb.login(key="f4a726b2fe7929990149e82fb88da423cfa74e46")
+
+wandb.init(project="fm")
 
 # Define the training function
 def train_flow_matching(config):
@@ -45,6 +51,14 @@ def train_flow_matching(config):
     model = Model_base(config)
     model = model.to(config.device)
 
+    # Convert learning_rate and divergence_loss_weight to float if they are strings
+    if isinstance(config.Training.learning_rate, str):
+        config.Training.learning_rate = float(config.Training.learning_rate)
+    if isinstance(config.Training.divergence_loss_weight, str):
+        config.Training.divergence_loss_weight = float(config.Training.divergence_loss_weight)
+    if isinstance(config.Training.sigma_min, str):
+        config.Training.sigma_min = float(config.Training.divergence_loss_weight)
+
     # Define the optimizer
     optimizer = optim.Adam(model.parameters(), lr=config.Training.learning_rate)
 
@@ -60,6 +74,8 @@ def train_flow_matching(config):
 
     # Training loop with validation loss
     print("Starting training...")
+    mse_losses = []
+    val_losses = []
     for epoch in range(config.Training.epochs):
         model.train()
         epoch_loss = 0.0
@@ -69,11 +85,10 @@ def train_flow_matching(config):
         for batch_idx, x1 in enumerate(train_loader):
             # Ensure all elements in the batch are tensors
             x1 = torch.tensor(x1) if isinstance(x1, np.ndarray) else x1
-
             print(f"Batch {batch_idx+1}/{len(train_loader)}")
             
             x0 = torch.randn_like(x1)
-            target = x1 - x0
+            target = x1 - (1 - config.Training.sigma_min) * x0
 
             # Ensure all tensors are on the same device
             x1 = x1.to(config.device)
@@ -84,14 +99,13 @@ def train_flow_matching(config):
             t = torch.rand(x1.size(0), device=config.device)
 
             # Interpolate between x0 and x1
-            xt = (1 - t[:, None, None, None, None]) * x0 + t[:, None, None, None, None] * x1
+            xt = (1 - (1 - config.Training.sigma_min) * t[:, None, None, None, None]) * x0 + t[:, None, None, None, None] * x1
 
             # Forward pass
             pred = model(xt, t)
-            x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
-
-            # Compute the loss
             loss = ((target - pred) ** 2).mean()
+            
+            x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
 
             # Compute the divergence-free loss
             divergence = utils.compute_divergence(x1_pred)
@@ -109,6 +123,7 @@ def train_flow_matching(config):
             mse_loss += loss.item()
             
         mse_loss /= len(train_loader)
+        mse_losses.append(mse_loss)
 
         # Validation loss
         model.eval()
@@ -131,6 +146,13 @@ def train_flow_matching(config):
                 val_loss += ((target - pred) ** 2).mean().item()
 
         val_loss /= len(val_loader)
+        val_losses.append(val_loss)
+        
+        wandb.log({
+            "epoch": epoch+1,
+            "train_loss": mse_loss,
+            "validation_loss": val_loss
+        })
 
         # Save checkpoint every 10 epochs
         if (epoch + 1) % 10 == 0:
@@ -140,6 +162,21 @@ def train_flow_matching(config):
 
         # Log the epoch loss and validation loss
         print(f"Epoch [{epoch + 1}/{config.Training.epochs}], Loss: {mse_loss:.4f}, Validation Loss: {val_loss:.4f}")
+        
+    wandb.finish()
+
+    # Plot losses after training
+    plt.figure()
+    plt.plot(range(1, config.Training.epochs + 1), mse_losses, label='Train MSE Loss')
+    plt.plot(range(1, config.Training.epochs + 1), val_losses, label='Validation Loss')
+    plt.yscale('log')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training History')
+    plt.legend()
+    plt.grid(True, which="both", ls="--")
+    image_path = os.path.join(run_dir, "history.png")
+    plt.savefig(image_path)
 
 if __name__ == "__main__":
     # Load the configuration
