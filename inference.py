@@ -19,7 +19,7 @@ def load_model(config, model_path):
     return model
 
 # Integrate ODE and generate samples
-def integrate_ode_and_sample(config, model, num_samples=1, steps=100):
+def integrate_ode_and_sample(config, model, num_samples=1, steps=10):
     torch.manual_seed(42)
     model.eval().requires_grad_(False)
 
@@ -38,18 +38,7 @@ def integrate_ode_and_sample(config, model, num_samples=1, steps=100):
 
         # Only store the final generated sample
         samples.append(xt.cpu().detach())
-
-    # Save the final generated sample as a plot
-    for i, sample in enumerate(samples):
-        plt.figure(figsize=(6, 6))
-        plt.imshow(sample[0, 0, :, :, sample.size(4) // 2].numpy(), cmap="viridis")
-        plt.title(f"Generated Sample {i}")
-        plt.colorbar()
-        plt.savefig(f"generated_sample_{i}.png")
-        plt.close()
-
-    model.train().requires_grad_(True)
-    print("Done Sampling")
+        
     return samples
 
 if __name__ == "__main__":
@@ -66,5 +55,8 @@ if __name__ == "__main__":
 
     # Generate samples using ODE integration
     print("Generating samples...")
-    num_samples = 3
+    num_samples = 1
     samples = integrate_ode_and_sample(config, model, num_samples=num_samples)
+    
+    for i, sample in enumerate(samples):
+        utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")

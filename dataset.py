@@ -13,7 +13,6 @@ class IsotropicTurbulenceDataset:
         self.field = field
         self.crop = crop
         
-        # First 3 channels are velocity, next one is pressure
         self.data = torch.load(f'data/data_{self.crop}_{dt}_{grid_size}.pt', weights_only=False)
         if isinstance(self.data, np.ndarray):
             self.data = torch.from_numpy(self.data)
