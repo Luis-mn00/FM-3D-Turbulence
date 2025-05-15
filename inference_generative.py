@@ -135,18 +135,16 @@ def residual_of_generated(samples, samples_gt, config):
     print(f"Mean L2 difference between generated samples and ground truth: {np.mean(l2_diff_norms)} +/- {np.std(l2_diff_norms)}")
 
 def test_wasserstein(samples, samples_gt, config):
-    wasserstein_distances = []
+    wasserstein_cmf_distances = []
     for i in range(len(samples)):
-        y = samples_gt[i]  # Ground truth sample, shape (N_channel, D, D, D)
-        y_pred = samples[i].squeeze(0)  # shape (N_channel, D, D, D)
-        distance = 0.0
-        for c in range(y.shape[0]):
-            distance += wasserstein_distance_nd(y[c], y_pred[c])
-        wasserstein_distances.append(distance)
+        y = samples_gt[i]  # Ground truth sample: (C, D, D, D)
+        y_pred = samples[i].squeeze(0)  # Prediction: (C, D, D, D)
+        
+        wasserstein_cmf_distances.append(utils.wasserstein(y, y_pred))
 
-    # Calculate mean and std of Wasserstein distances
-    mean_wasserstein = np.mean(wasserstein_distances)
-    std_wasserstein = np.std(wasserstein_distances)
+    # Mean and std
+    mean_wasserstein = np.mean(wasserstein_cmf_distances)
+    std_wasserstein = np.std(wasserstein_cmf_distances)
     print(f"Wasserstein distance: {mean_wasserstein:.4f} +/- {std_wasserstein:.4f}")
 
 if __name__ == "__main__":

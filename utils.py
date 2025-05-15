@@ -5,6 +5,10 @@ import argparse
 import random
 from scipy.interpolate import griddata
 from LSIM.distance_model import DistanceModel
+from typing import Optional
+import ot as pot
+from functools import partial
+import math
 
 def dict2namespace(config):
     namespace = argparse.Namespace()
@@ -197,6 +201,7 @@ def LSiM_distance(A, B):
     global lsim_model
 
     # Handle 5D input: (batch, channels, Nx, Ny, Nz)
+    # Still not okay. LSiM is not prepared for 3D data
     if len(A.shape) == 5:
         # Assume batch size 1 for generative inference
         assert A.shape[0] == 1 and B.shape[0] == 1, "Batch size > 1 not supported for 3D LSiM_distance."
@@ -294,3 +299,55 @@ def diffuse_mask(value_ids, A=1, sig=0.044, search_dist=-1, N=256, Nx=256, Ny=25
         # ...existing 2D code...
         # (leave your current 2D implementation here)
         pass
+    
+# https://github.com/atong01/conditional-flow-matching/blob/c25e1918a80dfacbe9475c055d61ac997f28262a/torchcfm/optimal_transport.py#L218
+def wasserstein(
+    x0: torch.Tensor,
+    x1: torch.Tensor,
+    method: Optional[str] = None,
+    reg: float = 0.05,
+    power: int = 2,
+    **kwargs,
+) -> float:
+    """Compute the Wasserstein (1 or 2) distance (wrt Euclidean cost) between a source and a target
+    distributions.
+
+    Parameters
+    ----------
+    x0 : Tensor, shape (bs, *dim)
+        represents the source minibatch
+    x1 : Tensor, shape (bs, *dim)
+        represents the source minibatch
+    method : str (default : None)
+        Use exact Wasserstein or an entropic regularization
+    reg : float (default : 0.05)
+        Entropic regularization coefficients
+    power : int (default : 2)
+        power of the Wasserstein distance (1 or 2)
+    Returns
+    -------
+    ret : float
+        Wasserstein distance
+    """
+    assert power == 1 or power == 2
+    # ot_fn should take (a, b, M) as arguments where a, b are marginals and
+    # M is a cost matrix
+    if method == "exact" or method is None:
+        ot_fn = pot.emd2
+    elif method == "sinkhorn":
+        ot_fn = partial(pot.sinkhorn2, reg=reg)
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+    a, b = pot.unif(x0.shape[0]), pot.unif(x1.shape[0])
+    if x0.dim() > 2:
+        x0 = x0.reshape(x0.shape[0], -1)
+    if x1.dim() > 2:
+        x1 = x1.reshape(x1.shape[0], -1)
+    M = torch.cdist(x0, x1)
+    if power == 2:
+        M = M**2
+    ret = ot_fn(a, b, M.detach().cpu().numpy(), numItermax=int(1e7))
+    if power == 2:
+        ret = math.sqrt(ret)
+    return ret
