@@ -24,27 +24,16 @@ def load_model(config, model_path):
     model.eval()
     return model
 
-def integrate_ode_and_sample(config, model, num_samples=1, steps=10):
-    torch.manual_seed(42)
+def integrate_ode_and_sample(config, model, x_lr, steps=10):
     model.eval().requires_grad_(False)
 
-    samples = []
-    for _ in range(num_samples):
-        # Initialize random sample
-        xt = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device)
+    xt = x_lr.to(config.device).float()
+    for i, t in enumerate(torch.linspace(0, 1, steps, device=config.device), start=1):
+        print(f"Step {i}/{steps}")
+        pred = model(xt, t.expand(xt.size(0)))
+        xt = xt + (1 / steps) * pred
 
-        for i, t in enumerate(torch.linspace(0, 1, steps, device=config.device), start=1):
-            print(f"Step {i}/{steps}")
-            # Predict the flow
-            pred = model(xt, t.expand(xt.size(0)))
-
-            # Update xt using the ODE integration step
-            xt = xt + (1 / steps) * pred
-
-        # Only store the final generated sample
-        samples.append(xt.cpu().detach())
-        
-    return samples
+    return xt
 
 def fm_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids, perc):
     
@@ -59,11 +48,11 @@ def fm_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_
         y     = samples_y[i].unsqueeze(0).to(config.device)
         noise = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
 
-        y_pred = fm_interp(model, noise.clone(), x.clone(), steps=10)
+        y_pred = integrate_ode_and_sample(config, model, x, steps=10)
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
-                                 f"super_interp_{i}")
+                                 f"super_direct_route_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
         residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred)**2)).item())

@@ -23,7 +23,6 @@ def load_model(config, model_path):
 
 # Integrate ODE and generate samples
 def integrate_ode_and_sample(config, model, num_samples=1, steps=10):
-    torch.manual_seed(42)
     model.eval().requires_grad_(False)
 
     samples = []
