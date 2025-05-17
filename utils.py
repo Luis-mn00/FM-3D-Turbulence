@@ -351,3 +351,13 @@ def wasserstein(
     if power == 2:
         ret = math.sqrt(ret)
     return ret
+
+def init_weights(model):
+    """
+    Set weight initialization for Conv3D in network.
+    Based on: https://discuss.pytorch.org/t/how-are-layer-weights-and-biases-initialized-by-default/13073/24
+    """
+    if isinstance(model, torch.nn.Conv3d):
+        torch.nn.init.xavier_uniform_(model.weight)
+        torch.nn.init.constant_(model.bias, 0)
+        # torch.nn.init.zeros_(model.bias)
