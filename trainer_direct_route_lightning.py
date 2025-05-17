@@ -104,15 +104,12 @@ class FlowMatchingModule(LightningModule):
 
 def train_flow_matching(config):
     print("Loading dataset...")
-    dataset_lr = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size_lr,
-                                            crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
-    velocity_lr = dataset_lr.velocity
-    velocity_lr = utils.upsample(velocity_lr, int(config.Data.grid_size/config.Data.grid_size_lr))
     dataset_hr = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size,
                                             crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
     velocity_hr = dataset_hr.velocity
+    velocity_lr = utils.interpolate_dataset(velocity_hr, config.Data.perc / 100)
 
-    total_size = len(dataset_lr)
+    total_size = len(dataset_hr)
     indices = np.arange(total_size)
     np.random.seed(config.Data.seed)
     np.random.shuffle(indices)

@@ -1,6 +1,6 @@
 Data:
   dt: 0.1
-  grid_size_lr: 64
+  perc: 5
   grid_size: 128
   seed: 1234
   crop: "crop"
@@ -18,7 +18,7 @@ Model:
   dropout: 0.1
   in_channels: 3
   resamp_with_conv: true
-  save_path: "runs/006/epoch_10_0.9957_1.1559.pth"
+  save_path: "runs/027/epoch_10_0.0064_0.0072.pth"
 
 Training:
   method: "std"

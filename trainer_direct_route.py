@@ -122,16 +122,14 @@ def create_dataloader(low_res_images, high_res_images, batch_size):
 def train_flow_matching(config):
     # Load the dataset
     print("Loading dataset...")
-    dataset_lr = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size_lr, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
-    velocity_lr = dataset_lr.velocity
-    velocity_lr = utils.upsample(velocity_lr, int(config.Data.grid_size/config.Data.grid_size_lr))
     dataset_hr = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
     velocity_hr = dataset_hr.velocity
+    velocity_lr = utils.interpolate_dataset(velocity_hr, config.Data.perc / 100)
 
     # Define the dataset split ratios
     train_ratio = 0.8
     val_ratio = 0.1
-    total_size = len(dataset_lr)
+    total_size = len(dataset_hr)
     train_size = int(train_ratio * total_size)
     val_size = int(val_ratio * total_size)
     test_size = total_size - train_size - val_size
