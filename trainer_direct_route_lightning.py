@@ -107,7 +107,7 @@ def train_flow_matching(config):
     dataset_hr = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size,
                                             crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
     velocity_hr = dataset_hr.velocity
-    velocity_lr = utils.interpolate_dataset(velocity_hr, config.Data.perc / 100)
+    velocity_lr, samples_ids = utils.interpolate_dataset(velocity_hr, config.Data.perc / 100)
 
     total_size = len(dataset_hr)
     indices = np.arange(total_size)
