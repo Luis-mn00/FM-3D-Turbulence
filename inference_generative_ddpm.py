@@ -77,7 +77,7 @@ def test_wasserstein(samples, samples_gt, config):
 if __name__ == "__main__":
     # Load the configuration
     print("Loading config...")
-    with open("configs/config_generative.yml", "r") as f:
+    with open("configs/config_ddpm.yml", "r") as f:
         config = yaml.safe_load(f)
     config = utils.dict2namespace(config)
     print(config.device)
@@ -86,8 +86,6 @@ if __name__ == "__main__":
     print("Loading model...")
     model = load_model(config, config.Model.save_path)
 
-    # Generate samples using ODE integration
-    print("Generating samples...")
     num_samples = 1
     dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
     velocity = dataset.velocity
@@ -118,6 +116,8 @@ if __name__ == "__main__":
     # Diffusion parameters
     diffusion = Diffusion(config)
     
+    # Generate samples using ODE integration
+    print("Generating samples...")
     samples_ddpm = generate_samples_with_denoiser(config, diffusion, model, num_samples)
     for i, sample in enumerate(samples_ddpm):
         utils.plot_slice(sample, 0, 1, 63, f"generated_ddpm_sample_{i}")

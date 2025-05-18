@@ -147,7 +147,7 @@ def ddpm_diff_mask_sparse_experiment(config, diffusion, model, nsamples, samples
 # Main script
 if __name__ == "__main__":
     print("Loading config...")
-    with open("configs/config_generative.yml", "r") as f:
+    with open("configs/config_ddpm.yml", "r") as f:
         config = yaml.safe_load(f)
     config = utils.dict2namespace(config)
     print(config.device)
