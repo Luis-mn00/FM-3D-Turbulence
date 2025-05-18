@@ -42,7 +42,7 @@ def ddpm_interp_sparse_experiment(config, diffusion, model, nsamples, samples_x,
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
-                                 f"super_interp_{i}")
+                                 f"super_ddpm_interp_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
         residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred)**2)).item())
@@ -84,7 +84,7 @@ def ddpm_mask_sparse_experiment(config, diffusion, model, nsamples, samples_x, s
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
-                                 f"super_mask_{i}")
+                                 f"super_ddpm_mask_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
         residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred)**2)).item())
@@ -128,7 +128,7 @@ def ddpm_diff_mask_sparse_experiment(config, diffusion, model, nsamples, samples
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
-                                 f"super_diff_mask_{i}")
+                                 f"super_ddpm_diff_mask_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
         residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred)**2)).item())

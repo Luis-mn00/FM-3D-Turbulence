@@ -120,7 +120,7 @@ if __name__ == "__main__":
     
     samples_ddpm = generate_samples_with_denoiser(config, diffusion, model, num_samples)
     for i, sample in enumerate(samples_ddpm):
-        utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
+        utils.plot_slice(sample, 0, 1, 63, f"generated_ddpm_sample_{i}")
         
     residual_of_generated(samples_ddpm, samples_gt, config)
     test_wasserstein(samples_ddpm, samples_gt, config)
