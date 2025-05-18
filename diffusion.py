@@ -61,6 +61,7 @@ class Diffusion():
         Re_ch = x_inp[:, 3:4]
 
         for i in reversed(range(t_start)):
+            print(f"Step {i}/{t_start}")
             t = (torch.ones(n) * i).to(x.device)
             b = self.betas[i]
             a = self.alphas[i]

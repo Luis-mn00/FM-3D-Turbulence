@@ -12,7 +12,11 @@ Model:
   h_dim: 128
   z_dim: 64
   in_channels: 3
-  save_path: "runs/006/epoch_10_0.9957_1.1559.pth"
+  time_embed_dim: 128
+  hidden_dim: 256
+  n_layers: 3
+  ae_path: "runs/006/epoch_10_0.9957_1.1559.pth"
+  lfm_path: "runs/006/epoch_10_0.9957_1.1559.pth"
 
 Training:
   method: "std"
