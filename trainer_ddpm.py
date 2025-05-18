@@ -159,6 +159,10 @@ def train_ddpm(config):
         config.Training.learning_rate = float(config.Training.learning_rate)
     if isinstance(config.Training.ddpm_loss_weight, str):
         config.Training.ddpm_loss_weight = float(config.Training.ddpm_loss_weight)
+    if isinstance(config.Training.gamma, str):
+        config.Training.gamma = float(config.Training.gamma)
+    if isinstance(config.Training.last_lr, str):
+        config.Training.last_lr = float(config.Training.last_lr)
 
     # Define the optimizer
     optimizer = optim.Adam(model.parameters(), lr=config.Training.learning_rate)

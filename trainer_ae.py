@@ -164,6 +164,10 @@ def train_ae(config):
         config.Training.learning_rate = float(config.Training.learning_rate)
     if isinstance(config.Training.divergence_loss_weight, str):
         config.Training.divergence_loss_weight = float(config.Training.divergence_loss_weight)
+    if isinstance(config.Training.gamma, str):
+        config.Training.gamma = float(config.Training.gamma)
+    if isinstance(config.Training.last_lr, str):
+        config.Training.last_lr = float(config.Training.last_lr)
     
     # Define the optimizer
     optimizer = optim.Adam(model.parameters(), lr=config.Training.learning_rate) # 1e-4 0 KLD, 1e-3 works, 1e-1 & 1e-2 gives NaN
@@ -243,6 +247,12 @@ def train_ae(config):
             "train_loss": epoch_total_loss,
             "validation_loss": val_loss
         })
+        
+        # Custom LR scheduler: multiply by gamma, but do not go below last_lr
+        for param_group in optimizer.param_groups:
+            current_lr = param_group['lr']
+            new_lr = max(current_lr * config.Training.gamma, config.Training.last_lr)
+            param_group['lr'] = new_lr
 
         # Save checkpoint every 10 epochs
         if (epoch + 1) % 10 == 0:

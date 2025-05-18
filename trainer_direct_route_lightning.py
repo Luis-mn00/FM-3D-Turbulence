@@ -100,6 +100,15 @@ class FlowMatchingModule(LightningModule):
         pred = self(xt, t)
         val_loss = ((target - pred) ** 2).mean()
         self.log("val_loss", val_loss, prog_bar=True)
+        
+    def on_train_epoch_end(self):
+        # Custom LR scheduler: multiply by gamma, but do not go below last_lr
+        optimizer = self.optimizers()
+        for param_group in optimizer.param_groups:
+            current_lr = param_group['lr']
+            new_lr = max(current_lr * float(self.config.Training.gamma), float(self.config.Training.last_lr))
+            param_group['lr'] = new_lr
+        self.log('lr', optimizer.param_groups[0]['lr'], prog_bar=True)
 
 
 def train_flow_matching(config):

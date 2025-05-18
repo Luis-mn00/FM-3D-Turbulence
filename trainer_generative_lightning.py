@@ -85,6 +85,15 @@ class FlowMatchingLightningModule(pl.LightningModule):
         self.log("val_loss", val_loss, prog_bar=True)
         return val_loss
 
+    def on_train_epoch_end(self):
+        # Custom LR scheduler: multiply by gamma, but do not go below last_lr
+        optimizer = self.optimizers()
+        for param_group in optimizer.param_groups:
+            current_lr = param_group['lr']
+            new_lr = max(current_lr * float(self.config.Training.gamma), float(self.config.Training.last_lr))
+            param_group['lr'] = new_lr
+        self.log('lr', optimizer.param_groups[0]['lr'], prog_bar=True)
+
 def create_dataloaders(config):
     dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size,
                                          crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
