@@ -21,4 +21,4 @@ Training:
   learning_rate: 1e-4
   divergence_loss_weight: 1e-3
 
-device: "cuda"
+device: "cpu"
