@@ -1,0 +1,32 @@
+Data:
+  dt: 0.1
+  perc: 5
+  grid_size: 64
+  seed: 1234
+  crop: "crop"
+  field: "vorticity"
+  norm: true
+  shuffle: true
+  size: 10
+
+Model:
+  ch: 64
+  out_ch: 3
+  ch_mult: [1, 2, 4]
+  num_res_blocks: 2
+  attn_resolutions: []
+  dropout: 0.1
+  in_channels: 3
+  resamp_with_conv: true
+  save_path: "runs/029/epoch_10_0.0188_0.0203.pth"
+
+Training:
+  method: "std"
+  epochs: 10
+  batch_size: 4
+  learning_rate: 1e-4
+  divergence_loss_weight: 1e-3
+  gamma: 0.98
+  last_lr: 1e-5
+
+device: "cpu"
