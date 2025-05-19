@@ -1,0 +1,17 @@
+Data:
+  dt: 0.1
+  perc: 5
+  grid_size: 64
+  seed: 1234
+  crop: "crop"
+  field: "vorticity"
+  norm: true
+  shuffle: true
+  size: 10
+
+Model:
+  N_modes: 4
+  N_train: 8
+  N_test: 1
+
+device: "cpu"
