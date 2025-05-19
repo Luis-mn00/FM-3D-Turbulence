@@ -164,7 +164,7 @@ def train_flow_matching(config):
     if isinstance(config.Training.divergence_loss_weight, str):
         config.Training.divergence_loss_weight = float(config.Training.divergence_loss_weight)
     if isinstance(config.Training.sigma_min, str):
-        config.Training.sigma_min = float(config.Training.divergence_loss_weight)
+        config.Training.sigma_min = float(config.Training.sigma_min)
     if isinstance(config.Training.gamma, str):
         config.Training.gamma = float(config.Training.gamma)
     if isinstance(config.Training.last_lr, str):
