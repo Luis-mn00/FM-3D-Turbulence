@@ -40,7 +40,7 @@ def sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
-                                 f"super_direct_route_{i}")
+                                 f"super_regression_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
         residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred)**2)).item())

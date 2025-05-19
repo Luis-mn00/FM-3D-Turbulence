@@ -18,7 +18,7 @@ Model:
   dropout: 0.1
   in_channels: 3
   resamp_with_conv: true
-  save_path: "runs/029/epoch_10_0.0188_0.0203.pth"
+  save_path: "runs/047/epoch_10_0.0857_0.0802.pth"
 
 Training:
   method: "std"
