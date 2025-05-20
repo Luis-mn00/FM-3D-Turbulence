@@ -114,7 +114,7 @@ class IsotropicTurbulenceDataset:
         return self.size
     
 class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
-    def __init__(self, file_path, sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=32, num_samples=10):
+    def __init__(self, file_path, sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=32, num_samples=10, test=False):
         self.file_path = file_path
         self.sim_group = sim_group
         self.norm = norm
@@ -177,20 +177,21 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
         n_test = int(len(self.indices) * self.test_ratio)
         self.train_dataset = None
         self.test_dataset = None
-        with h5py.File(self.file_path, 'r') as f:
-            # Train dataset
-            #train_dataset = []
-            #for i in range(n_train):
-            #    sample = f['sims'][self.sim_group][self.indices[i]][:]
-            #    sample = np.transpose(sample, (3, 0, 1, 2)).astype(np.float16)
-            #    train_dataset.append(sample)
-            #self.train_dataset = torch.tensor(np.stack(train_dataset, axis=0), dtype=torch.float16)
-            # Test dataset
-            test_dataset = []
-            for i in range(len(self.indices) - n_test, len(self.indices)):
-                print(i)
-                sample = f['sims'][self.sim_group][self.indices[i]][:]
-                sample = np.transpose(sample, (3, 0, 1, 2)).astype(np.float16)
-                test_dataset.append(sample)
-            self.test_dataset = torch.tensor(np.stack(test_dataset, axis=0), dtype=torch.float16)
-            self.test_dataset = self.test_dataset[:self.num_samples]
+        if test:
+            with h5py.File(self.file_path, 'r') as f:
+                # Train dataset
+                #train_dataset = []
+                #for i in range(n_train):
+                #    sample = f['sims'][self.sim_group][self.indices[i]][:]
+                #    sample = np.transpose(sample, (3, 0, 1, 2)).astype(np.float16)
+                #    train_dataset.append(sample)
+                #self.train_dataset = torch.tensor(np.stack(train_dataset, axis=0), dtype=torch.float16)
+                # Test dataset
+                test_dataset = []
+                for i in range(len(self.indices) - n_test, len(self.indices)):
+                    print(i)
+                    sample = f['sims'][self.sim_group][self.indices[i]][:]
+                    sample = np.transpose(sample, (3, 0, 1, 2)).astype(np.float16)
+                    test_dataset.append(sample)
+                self.test_dataset = torch.tensor(np.stack(test_dataset, axis=0), dtype=torch.float16)
+                self.test_dataset = self.test_dataset[:self.num_samples]
