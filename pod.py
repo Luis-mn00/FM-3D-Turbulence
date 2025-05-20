@@ -6,7 +6,7 @@ import torch
 import time
 import yaml
 
-from dataset import IsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
 
 def reshape_data(data):
@@ -14,12 +14,11 @@ def reshape_data(data):
     if isinstance(data, torch.Tensor):
         data = data.cpu().numpy()
     nsamples, N_channels, Nx, Ny, Nz = data.shape
-    
-    # Create a tensor for all channels: (N_channels, nsamples, Nx*Ny*Nz)
+    # Use float32 instead of float64 for memory efficiency
     channel_matrices = np.empty((N_channels, nsamples, Nx*Ny*Nz), dtype=np.float32)
     for c in range(N_channels):
-        channel_data = data[:, c, :, :, :]  # (nsamples, Nx, Ny, Nz)
-        channel_matrix = channel_data.reshape(nsamples, -1)  # (nsamples, Nx*Ny*Nz)
+        channel_data = data[:, c, :, :, :].astype(np.float32)  # Ensure float32
+        channel_matrix = channel_data.reshape(nsamples, -1)
         channel_matrices[c] = channel_matrix
         print(f"Channel {c} matrix shape for SVD: {channel_matrix.shape}")
     return channel_matrices
@@ -114,23 +113,21 @@ config = utils.dict2namespace(config)
 print(config.device)        
     
 print("Loading dataset...")
-dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
-velocity = dataset.velocity
-nsamples, N_channels, Nx, Ny, Nz = velocity.shape
+num_samples = 10
+dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
+#dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, pod=True)
 
-velocity_train = velocity[:config.Model.N_train, :, :, :, :]
-print(velocity_train.shape)
-velocity_test = velocity[-config.Model.N_test:, :, :, :, :]
-print(velocity_test.shape)
-data_matrices = reshape_data(velocity_train)
+train_dataset = dataset.train_dataset
+test_dataset = dataset.test_dataset
+data_matrices = reshape_data(train_dataset)
 print(data_matrices.shape)
 
 # Create all code separately for each channel
-C, indices = create_selection_matrix(Nx, Ny, Nz, 0.2)
-velocity_test_interpolated = torch.zeros((config.Model.N_test, N_channels, Nx, Ny, Nz), dtype=torch.float32, device=config.device)
-velocity_test_reconstructed = torch.zeros((config.Model.N_test, N_channels, Nx, Ny, Nz), dtype=torch.float32, device=config.device)
-for i in range(N_channels):
-    print(f"Processing channel {i+1}/{N_channels}")
+C, indices = create_selection_matrix(dataset.Nx, dataset.Ny, dataset.Nz, 0.2)
+data_test_interpolated = torch.zeros((num_samples, dataset.N_channels, dataset.Nx, dataset.Ny, dataset.Nz), dtype=torch.float32, device=config.device)
+data_test_reconstructed = torch.zeros((num_samples, dataset.N_channels, dataset.Nx, dataset.Ny, dataset.Nz), dtype=torch.float32, device=config.device)
+for i in range(dataset.N_channels):
+    print(f"Processing channel {i+1}/{dataset.N_channels}")
     data_matrix = data_matrices[i].T
     U, S, Vt = compute_pod(data_matrix)
     print("POD computed")
@@ -139,17 +136,17 @@ for i in range(N_channels):
     plot_singular_values(S)
 
     # Select the first snapshot for demonstration of sparse reconstruction
-    snapshot = velocity[0, i, :, :, :].reshape(Nx, Ny, Nz)
-    interpolated_snapshot = direct_interpolation(snapshot, indices, Nx, Ny, Nz)
-    reconstruct_snapshot = perform_superresolution(U, config.Model.N_modes, C, snapshot, Nx, Ny, Nz, config)
-    plot_sparse_reconstruction(snapshot[:, :, int(Nz/2)], interpolated_snapshot[:, :, int(Nz/2)], reconstruct_snapshot[:, :, int(Nz/2)], f"generated_plots/pod_reconstruction_{i+1}.png")
+    snapshot = train_dataset[0, i, :, :, :].reshape(dataset.Nx, dataset.Ny, dataset.Nz)
+    interpolated_snapshot = direct_interpolation(snapshot, indices, dataset.Nx, dataset.Ny, dataset.Nz)
+    reconstruct_snapshot = perform_superresolution(U, config.Model.N_modes, C, snapshot, dataset.Nx, dataset.Ny, dataset.Nz, config)
+    plot_sparse_reconstruction(snapshot[:, :, int(dataset.Nz/2)], interpolated_snapshot[:, :, int(dataset.Nz/2)], reconstruct_snapshot[:, :, int(dataset.Nz/2)], f"generated_plots/pod_reconstruction_{i+1}.png")
 
-    for j in range(config.Model.N_test):
-        snapshot = velocity_test[j, i, :, :, :].reshape(Nx, Ny, Nz)
-        interpolated_snapshot = direct_interpolation(snapshot, indices, Nx, Ny, Nz)
-        reconstruct_snapshot = perform_superresolution(U, config.Model.N_modes, C, snapshot, Nx, Ny, Nz, config)
-        velocity_test_interpolated[j, i, :, :, :] = torch.tensor(interpolated_snapshot, dtype=torch.float32, device=config.device)
-        velocity_test_reconstructed[j, i, :, :, :] = torch.tensor(reconstruct_snapshot, dtype=torch.float32, device=config.device)
+    for j in range(num_samples):
+        snapshot = test_dataset[j, i, :, :, :].reshape(dataset.Nx, dataset.Ny, dataset.Nz)
+        interpolated_snapshot = direct_interpolation(snapshot, indices, dataset.Nx, dataset.Ny, dataset.Nz)
+        reconstruct_snapshot = perform_superresolution(U, config.Model.N_modes, C, snapshot, dataset.Nx, dataset.Ny, dataset.Nz, config)
+        data_test_interpolated[j, i, :, :, :] = torch.tensor(interpolated_snapshot, dtype=torch.float32, device=config.device)
+        data_test_reconstructed[j, i, :, :, :] = torch.tensor(reconstruct_snapshot, dtype=torch.float32, device=config.device)
         
 
 # Calculate metrics
@@ -157,22 +154,19 @@ list_rmse = []
 list_lsim = []
 list_residual = []
 list_diff = []
-for j in range(config.Model.N_test):
-    print(velocity_test[j].shape)
-    print(velocity_test_reconstructed[j].shape)
-    
-    rmse = torch.sqrt(torch.mean((velocity_test[j] - velocity_test_reconstructed[j]) ** 2)).item()
+for j in range(num_samples):
+    rmse = torch.sqrt(torch.mean((test_dataset[j] - data_test_reconstructed[j]) ** 2)).item()
     list_rmse.append(rmse)
     
-    gt_residual = utils.compute_divergence(velocity_test[j].unsqueeze(0))
-    pred_residual = utils.compute_divergence(velocity_test_reconstructed[j].unsqueeze(0))
+    gt_residual = utils.compute_divergence(test_dataset[j, :3].unsqueeze(0))
+    pred_residual = utils.compute_divergence(data_test_reconstructed[j, :3].unsqueeze(0))
     residual_norm = torch.sqrt(torch.mean(pred_residual**2)).item()
     residual_diff = abs(residual_norm - torch.sqrt(torch.mean(gt_residual**2)).item())
     list_residual.append(residual_norm)
     list_diff.append(residual_diff)
     
-    y = velocity_test[j].unsqueeze(0).detach()
-    y_pred = velocity_test_reconstructed[j].unsqueeze(0).detach()
+    y = test_dataset[j].unsqueeze(0).detach()
+    y_pred = data_test_reconstructed[j].unsqueeze(0).detach()
     list_lsim.append(utils.LSiM_distance(y, y_pred))
      
 print(f"RMSE over test snapshots (Gappy POD): {np.mean(list_rmse):.4f} +/- {np.std(list_rmse):.4f}")

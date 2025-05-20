@@ -16,7 +16,7 @@ from conflictfree.grad_operator import ConFIGOperator
 
 from model_ae import CVAE_3D, CVAE_3D_II
 from loss import schedule_KL_annealing
-from dataset import IsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
 from my_config_length import UniProjectionLength
 
@@ -127,36 +127,16 @@ def ConFIG_step(model, batch, kl_weight, optimizer, config, operator):
 
 def train_ae(config):
     print("Loading dataset...")
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
-    velocity = dataset.velocity
-
-    # Define the dataset split ratios
-    train_ratio = 0.8
-    val_ratio = 0.1
-
-    total_size = len(dataset)
-    train_size = int(train_ratio * total_size)
-    val_size = int(val_ratio * total_size)
-    test_size = total_size - train_size - val_size
-
-    # Split the dataset randomly with config.Data.seed
-    indices = np.arange(total_size)
-    np.random.seed(config.Data.seed)
-    np.random.shuffle(indices)
-    train_indices = indices[:train_size]
-    val_indices = indices[train_size:train_size + val_size]
-    test_indices = indices[train_size + val_size:]
-    train_dataset = torch.utils.data.Subset(velocity, train_indices)
-    val_dataset = torch.utils.data.Subset(velocity, val_indices)
-    test_dataset = torch.utils.data.Subset(velocity, test_indices)
+    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size)
+    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5)
 
     # Update the dataloaders
-    train_loader = DataLoader(train_dataset, batch_size=config.Training.batch_size, shuffle=False)
-    val_loader = DataLoader(val_dataset, batch_size=config.Training.batch_size, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=config.Training.batch_size, shuffle=False)
-
+    train_loader = dataset.train_loader
+    val_loader = dataset.val_loader
+    test_loader = dataset.test_loader
+    
     # instantiate model and initialize network weights
-    model = CVAE_3D_II(image_channels=config.Model.in_channels, h_dim=config.Model.h_dim, z_dim=config.Model.z_dim).to(device=config.device, dtype=torch.float)
+    model = CVAE_3D_II(image_channels=config.Model.in_channels, h_dim=config.Model.h_dim, z_dim=config.Model.z_dim, input_shape=(config.Model.in_channels, dataset.Nx, dataset.Ny, dataset.Nz)).to(device=config.device, dtype=torch.float)
     model.apply(utils.init_weights) # xavier initialization
     
     # Convert learning_rate and divergence_loss_weight to float if they are strings
@@ -171,7 +151,6 @@ def train_ae(config):
     
     # Define the optimizer
     optimizer = optim.Adam(model.parameters(), lr=config.Training.learning_rate) # 1e-4 0 KLD, 1e-3 works, 1e-1 & 1e-2 gives NaN
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, len(train_loader))
 
     # Find the next run directory
     runs_dir = "runs"

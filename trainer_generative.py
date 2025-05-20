@@ -9,7 +9,7 @@ import wandb
 from conflictfree.utils import get_gradient_vector
 from conflictfree.grad_operator import ConFIGOperator
 
-from dataset import IsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
 from model_simple import Model_base
 from my_config_length import UniProjectionLength
@@ -39,7 +39,7 @@ def fm_PINN_step(model, xt, t, target, optimizer, config):
     x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(x1_pred)
+    divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :])
     divergence_loss = torch.mean(divergence ** 2)
 
     # Combine the flow matching loss and the divergence-free loss
@@ -60,7 +60,7 @@ def fm_PINN_dyn_step(model, xt, t, target, optimizer, config):
     x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(x1_pred)
+    divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :])
     divergence_loss = torch.mean(divergence ** 2)
 
     # Combine the flow matching loss and the divergence-free loss
@@ -82,7 +82,7 @@ def fm_ConFIG_step(model, xt, t, target, optimizer, config, operator):
     x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(x1_pred)
+    divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :])
     divergence_loss = torch.mean(divergence ** 2)
     
     # ConFIG
@@ -104,33 +104,13 @@ def fm_ConFIG_step(model, xt, t, target, optimizer, config, operator):
 def train_flow_matching(config):
     # Load the dataset
     print("Loading dataset...")
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
-    velocity = dataset.velocity
-
-    # Define the dataset split ratios
-    train_ratio = 0.8
-    val_ratio = 0.1
-
-    total_size = len(dataset)
-    train_size = int(train_ratio * total_size)
-    val_size = int(val_ratio * total_size)
-    test_size = total_size - train_size - val_size
-
-    # Split the dataset randomly with config.Data.seed
-    indices = np.arange(total_size)
-    np.random.seed(config.Data.seed)
-    np.random.shuffle(indices)
-    train_indices = indices[:train_size]
-    val_indices = indices[train_size:train_size + val_size]
-    test_indices = indices[train_size + val_size:]
-    train_dataset = torch.utils.data.Subset(velocity, train_indices)
-    val_dataset = torch.utils.data.Subset(velocity, val_indices)
-    test_dataset = torch.utils.data.Subset(velocity, test_indices)
+    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size)
+    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5)
 
     # Update the dataloaders
-    train_loader = DataLoader(train_dataset, batch_size=config.Training.batch_size, shuffle=False)
-    val_loader = DataLoader(val_dataset, batch_size=config.Training.batch_size, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=config.Training.batch_size, shuffle=False)
+    train_loader = dataset.train_loader
+    val_loader = dataset.val_loader
+    test_loader = dataset.test_loader
 
     # Initialize the model
     model = Model_base(config)

@@ -9,7 +9,7 @@ import wandb
 from conflictfree.utils import get_gradient_vector
 from conflictfree.grad_operator import ConFIGOperator
 
-from dataset import IsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
 from model_regression import Model_base
 from my_config_length import UniProjectionLength
@@ -37,7 +37,7 @@ def PINN_step(model, x, target, optimizer, config):
     loss = ((target - pred) ** 2).mean()
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(pred)
+    divergence = utils.compute_divergence(pred[:, :3, :, :, :])
     divergence_loss = torch.mean(divergence ** 2)
 
     # Combine the flow matching loss and the divergence-free loss
@@ -56,7 +56,7 @@ def PINN_dyn_step(model, x, target, optimizer, config):
     loss = ((target - pred) ** 2).mean()
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(pred)
+    divergence = utils.compute_divergence(pred[:, :3, :, :, :])
     divergence_loss = torch.mean(divergence ** 2)
 
     # Combine the flow matching loss and the divergence-free loss
@@ -76,7 +76,7 @@ def ConFIG_step(model, x, target, optimizer, config, operator):
     loss = ((target - pred) ** 2).mean()
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(pred)
+    divergence = utils.compute_divergence(pred[:, :3, :, :, :])
     divergence_loss = torch.mean(divergence ** 2)
     
     # ConFIG
@@ -116,37 +116,13 @@ def create_dataloader(low_res_images, high_res_images, batch_size):
 def train_flow_matching(config):
     # Load the dataset
     print("Loading dataset...")
-    dataset_hr = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
-    velocity_hr = dataset_hr.velocity
-    velocity_lr, samples_ids = utils.interpolate_dataset(velocity_hr, config.Data.perc / 100)
+    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size)
+    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5)
 
-    # Define the dataset split ratios
-    train_ratio = 0.8
-    val_ratio = 0.1
-    total_size = len(dataset_hr)
-    train_size = int(train_ratio * total_size)
-    val_size = int(val_ratio * total_size)
-    test_size = total_size - train_size - val_size
-
-    # Split the dataset randomly with config.Data.seed
-    indices = np.arange(total_size)
-    np.random.seed(config.Data.seed)
-    np.random.shuffle(indices)
-    train_indices = indices[:train_size]
-    val_indices = indices[train_size:train_size + val_size]
-    test_indices = indices[train_size + val_size:]
-    
-    train_dataset_lr = torch.utils.data.Subset(velocity_lr, train_indices)
-    val_dataset_lr = torch.utils.data.Subset(velocity_lr, val_indices)
-    test_dataset_lr = torch.utils.data.Subset(velocity_lr, test_indices)
-    train_dataset_hr = torch.utils.data.Subset(velocity_hr, train_indices)
-    val_dataset_hr = torch.utils.data.Subset(velocity_hr, val_indices)
-    test_dataset_hr = torch.utils.data.Subset(velocity_hr, test_indices)
-
-    # Dataloaders with the lr and hr datasets combined
-    train_loader = create_dataloader(train_dataset_lr, train_dataset_hr, batch_size=config.Training.batch_size)
-    val_loader = create_dataloader(val_dataset_lr, val_dataset_hr, batch_size=config.Training.batch_size)
-    test_loader = create_dataloader(test_dataset_lr, test_dataset_hr, batch_size=config.Training.batch_size)
+    # Update the dataloaders
+    train_loader = dataset.train_loader
+    val_loader = dataset.val_loader
+    test_loader = dataset.test_loader
 
     # Initialize the model
     model = Model_base(config)
@@ -186,11 +162,12 @@ def train_flow_matching(config):
 
         # Get the next batch from the train_loader
         batch_idx = 0
-        for batch_X, batch_Y in train_loader:
+        for batch_Y in train_loader:
             batch_idx += 1
             print(f"Batch {batch_idx}/{len(train_loader)}")
 
             # Ensure all elements in the batch are tensors
+            batch_X, samples_ids = utils.interpolate_dataset(batch_Y, config.Data.perc / 100)
             y = torch.tensor(batch_Y) if isinstance(batch_Y, np.ndarray) else batch_Y
             x = torch.tensor(batch_X) if isinstance(batch_X, np.ndarray) else batch_X
             y = y.to(config.device)
@@ -224,7 +201,8 @@ def train_flow_matching(config):
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
-            for batch_X, batch_Y in val_loader:
+            for batch_Y in val_loader:
+                batch_X, samples_ids = utils.interpolate_dataset(batch_Y, config.Data.perc / 100)
                 y = torch.tensor(batch_Y) if isinstance(batch_Y, np.ndarray) else batch_Y
                 x = torch.tensor(batch_X) if isinstance(batch_X, np.ndarray) else batch_X
                 y = y.to(config.device)

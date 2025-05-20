@@ -10,12 +10,12 @@ Data:
 
 Model:
   ch: 64
-  out_ch: 3
+  out_ch: 4
   ch_mult: [1, 2, 4]
   num_res_blocks: 2
   attn_resolutions: []
   dropout: 0.1
-  in_channels: 3
+  in_channels: 4
   resamp_with_conv: true
   save_path: "runs/006/epoch_10_0.9957_1.1559.pth"
 

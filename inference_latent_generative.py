@@ -5,7 +5,7 @@ import yaml
 import numpy as np
 from scipy.stats import wasserstein_distance_nd
 
-from dataset import IsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
 from model_simple import Model_base
 from model_latent import LatentFlowMatchingModel
@@ -169,31 +169,10 @@ if __name__ == "__main__":
     ae = load_autoencoder(config, config.Model.ae_path)
 
     print("Generating samples (latent FM)...")
-    num_samples = 1
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
-    velocity = dataset.velocity
-    # Define the dataset split ratios
-    train_ratio = 0.8
-    val_ratio = 0.1
-
-    total_size = len(dataset)
-    train_size = int(train_ratio * total_size)
-    val_size = int(val_ratio * total_size)
-    test_size = total_size - train_size - val_size
-
-    # Split the dataset randomly with config.Data.seed
-    indices = np.arange(total_size)
-    np.random.seed(config.Data.seed)
-    np.random.shuffle(indices)
-    train_indices = indices[:train_size]
-    val_indices = indices[train_size:train_size + val_size]
-    test_indices = indices[train_size + val_size:]
-    train_dataset = torch.utils.data.Subset(velocity, train_indices)
-    val_dataset = torch.utils.data.Subset(velocity, val_indices)
-    test_dataset = torch.utils.data.Subset(velocity, test_indices)
-    
-    # Just take the first num_samples from the test dataset
-    samples_gt = test_dataset[0:num_samples]
+    num_samples = 10
+    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
+    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples)
+    samples_gt = dataset.test_dataset
 
     samples_fm = integrate_ode_and_sample_latent(config, model, ae, num_samples=num_samples)
     for i, sample in enumerate(samples_fm):

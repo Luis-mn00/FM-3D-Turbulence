@@ -8,7 +8,7 @@ import numpy as np
 import utils
 import random
 
-from dataset import IsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
 from model_simple import Model_base
 from model_ae import Autoencoder
@@ -87,32 +87,11 @@ if __name__ == "__main__":
     print(config.device)
     
     print("Loading dataset...")
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size)
-    velocity = dataset.velocity
-    
-    # Define the dataset split ratios
-    train_ratio = 0.8
-    val_ratio = 0.1
-
-    total_size = len(dataset)
-    train_size = int(train_ratio * total_size)
-    val_size = int(val_ratio * total_size)
-    test_size = total_size - train_size - val_size
-
-    # Split the dataset randomly with config.Data.seed
-    indices = np.arange(total_size)
-    np.random.seed(config.Data.seed)
-    np.random.shuffle(indices)
-    train_indices = indices[:train_size]
-    val_indices = indices[train_size:train_size + val_size]
-    test_indices = indices[train_size + val_size:]
-    train_dataset = torch.utils.data.Subset(velocity, train_indices)
-    val_dataset = torch.utils.data.Subset(velocity, val_indices)
-    test_dataset = torch.utils.data.Subset(velocity, test_indices)
-    
-    num_samples = 1
+    num_samples = 10
+    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
+    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples)
+    samples_y = dataset.test_dataset
     perc = 5
-    samples_y = test_dataset[0:num_samples]
     samples_x, samples_ids = utils.interpolate_dataset(samples_y, perc/100)
 
     print("Loading autoencoder...")

@@ -184,8 +184,6 @@ def interpolate_dataset(dataset, perc, method="nearest"):
     sampled_ids = np.zeros((n_samples, n_points), dtype=np.int32)
 
     for i in range(n_samples):
-        if i % 100 == 0:
-            print(f"Interpolating sample {i} of {n_samples}")
         sampled_ids[i] = np.array(random.sample(range(np.prod(dims)), n_points))
         for c in range(n_channels):
             X_vals[i, c] = interpolate_points(X_vals[i, c], perc=perc, ids=sampled_ids[i], method=method)
@@ -210,8 +208,8 @@ def LSiM_distance(A, B):
         total_dist = 0.0
         for z in range(Nz):
             # For each z-slice, shape (channels, Nx, Ny)
-            A_slice = A[0, :, :, :, z]
-            B_slice = B[0, :, :, :, z]
+            A_slice = A[0, :3, :, :, z]
+            B_slice = B[0, :3, :, :, z]
             total_dist += LSiM_distance(A_slice, B_slice)
         return total_dist
 

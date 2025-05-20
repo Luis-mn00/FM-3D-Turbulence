@@ -7,11 +7,9 @@ Data:
   field: "vorticity"
   norm: true
   shuffle: true
-  size: 10
+  size: 100
 
 Model:
-  N_modes: 4
-  N_train: 8
-  N_test: 1
+  N_modes: 20
 
 device: "cpu"
