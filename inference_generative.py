@@ -27,11 +27,12 @@ def integrate_ode_and_sample(config, model, num_samples=1, steps=10):
 
     samples = []
     for _ in range(num_samples):
+        print(f"Generating sample {_+1}/{num_samples}")
         # Initialize random sample
         xt = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device)
 
         for i, t in enumerate(torch.linspace(0, 1, steps, device=config.device), start=1):
-            print(f"Step {i}/{steps}")
+            #print(f"Step {i}/{steps}")
             # Predict the flow
             pred = model(xt, t.expand(xt.size(0)))
 
@@ -67,7 +68,7 @@ def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
     for i, j in zip(reversed(seq), reversed(next_seq)):
         t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)  # Normalize time to [1, 0]
         t = 1 - t  # Invert to match FM
-        print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
+        #print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
 
         alpha_bar_t = alphas_cumprod[i] if i < len(alphas_cumprod) else alphas_cumprod[-1]
         alpha_bar_next = alphas_cumprod[j] if 0 <= j < len(alphas_cumprod) else alpha_bar_t
@@ -95,6 +96,7 @@ def generate_samples_with_denoiser(config, model, num_samples, t_start, reverse_
 
     samples = []
     for _ in range(num_samples):
+        print(f"Generating sample {_+1}/{num_samples}")
         # Ensure the input tensor is in float format to match the model's parameters
         x = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
         
@@ -107,21 +109,22 @@ def generate_samples_with_denoiser(config, model, num_samples, t_start, reverse_
 def residual_of_generated(samples, samples_gt, config):
     rmse_loss = np.zeros(len(samples))
     for i in range(len(samples)):
-        print("Batch", i)
         # Ensure all tensors are on the same device
         sample = samples[i].to(config.device)
-        res, = utils.compute_divergence(sample)
+        res, = utils.compute_divergence(sample[:, :3, :, :, :])
         rmse_loss[i] = torch.sqrt(torch.mean(res**2))
     
     test_residuals = []
     for i in range(len(samples)):
         sample_gt = samples_gt[i].to(config.device)
         sample_gt = sample_gt.unsqueeze(0)
-        res_gt, = utils.compute_divergence(sample_gt)
+        res_gt, = utils.compute_divergence(sample_gt[:, :3, :, :, :])
         test_residuals.append(torch.sqrt(torch.mean(res_gt**2)))
         
-    print(f"L2 residual: {np.mean(rmse_loss):.2f} +/- {np.std(rmse_loss):.2f}") 
-    print(f"Residual difference: {np.mean(rmse_loss - test_residuals)} +/- {np.std(rmse_loss - test_residuals)}")
+    print(f"L2 residual: {np.mean(rmse_loss):.4f} +/- {np.std(rmse_loss):.4f}") 
+    # Ensure test_residuals is a numpy array on CPU
+    test_residuals_np = np.array([r.cpu().item() if torch.is_tensor(r) else r for r in test_residuals])
+    print(f"Residual difference: {np.mean(rmse_loss - test_residuals_np):.4f} +/- {np.std(rmse_loss - test_residuals_np):.4f}")
 
     # Compute L2 norm of the difference between samples and ground truth
     l2_diff_norms = []
@@ -131,7 +134,7 @@ def residual_of_generated(samples, samples_gt, config):
         l2_diff_norm = torch.sqrt(torch.mean((y - y_pred) ** 2)).item()
         l2_diff_norms.append(l2_diff_norm)
 
-    print(f"Mean L2 difference between generated samples and ground truth: {np.mean(l2_diff_norms)} +/- {np.std(l2_diff_norms)}")
+    print(f"Mean L2 difference between generated samples and ground truth: {np.mean(l2_diff_norms):.4f} +/- {np.std(l2_diff_norms):.4f}")
 
 def test_wasserstein(samples, samples_gt, config):
     wasserstein_cmf_distances = []
@@ -159,13 +162,15 @@ if __name__ == "__main__":
     model = load_model(config, config.Model.save_path)
 
     # Generate samples using ODE integration
-    print("Generating samples...")
     num_samples = 10
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
-    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True)
+    #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, num_samples=num_samples, field=None)
+    dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True)
     samples_gt = dataset.test_dataset
+    for i in range(samples_gt.shape[0]):
+        utils.plot_slice(samples_gt, i, 1, 63, f"gt_sample_{i}")
     
-    samples_fm = integrate_ode_and_sample(config, model, num_samples=num_samples)
+    print("Generating samples...")
+    samples_fm = integrate_ode_and_sample(config, model, num_samples=num_samples, steps=100)
     for i, sample in enumerate(samples_fm):
         utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
         

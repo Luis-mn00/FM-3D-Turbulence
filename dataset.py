@@ -114,7 +114,7 @@ class IsotropicTurbulenceDataset:
         return self.size
     
 class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
-    def __init__(self, file_path, sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=32, num_samples=10, test=False):
+    def __init__(self, file_path, sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=32, num_samples=10, test=False, grid_size=128):
         self.file_path = file_path
         self.sim_group = sim_group
         self.norm = norm
@@ -124,8 +124,9 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
         self.test_ratio = test_ratio
         self.batch_size = batch_size
         self.num_samples = num_samples
+        self.grid_size = grid_size
         
-        self.N_time, self.N_channels, self.Nx, self.Ny, self.Nz = 500, 4, 512, 512, 512
+        self.N_time, self.N_channels, self.Nx, self.Ny, self.Nz = 500, 4, grid_size, grid_size, grid_size
 
         # Open file once to get keys and normalization constants
         with h5py.File(self.file_path, 'r') as f:
@@ -148,29 +149,37 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
 
         # Define inner dataset class for on-the-fly loading
         class HDF5SampleDataset(torch.utils.data.Dataset):
-            def __init__(self, file_path, sim_group, indices, norm, fields_mean, fields_std):
+            def __init__(self, file_path, sim_group, indices, norm, fields_mean, fields_std, grid_size):
                 self.file_path = file_path
                 self.sim_group = sim_group
                 self.indices = indices
                 self.norm = norm
                 self.fields_mean = fields_mean
                 self.fields_std = fields_std
+                self.grid_size = grid_size
             def __len__(self):
                 return len(self.indices)
             def __getitem__(self, idx):
                 with h5py.File(self.file_path, 'r') as f:
                     sample = f['sims'][self.sim_group][self.indices[idx]][:]
-                    # Change shape from (512, 512, 512, 4) to (4, 512, 512, 512)
+                    # Change shape from (512, 512, 512, C) to (C, 512, 512, 512)
                     sample = np.transpose(sample, (3, 0, 1, 2))
                     if self.norm:
                         sample = (sample - self.fields_mean) / self.fields_std
+                    # Crop a centered window of size grid_size x grid_size x grid_size
+                    c, d, h, w = sample.shape
+                    gs = self.grid_size
+                    start_d = (d - gs) // 2
+                    start_h = (h - gs) // 2
+                    start_w = (w - gs) // 2
+                    sample = sample[:, start_d:start_d+gs, start_h:start_h+gs, start_w:start_w+gs]
                     sample = torch.tensor(sample, dtype=torch.float32)
                 return sample
 
         # General dataloaders
-        self.train_loader = DataLoader(HDF5SampleDataset(self.file_path, self.sim_group, train_indices, self.norm, self.fields_mean, self.fields_std), batch_size=self.batch_size, shuffle=False)
-        self.val_loader = DataLoader(HDF5SampleDataset(self.file_path, self.sim_group, val_indices, self.norm, self.fields_mean, self.fields_std), batch_size=self.batch_size, shuffle=False)
-        self.test_loader = DataLoader(HDF5SampleDataset(self.file_path, self.sim_group, test_indices, self.norm, self.fields_mean, self.fields_std), batch_size=self.batch_size, shuffle=False)
+        self.train_loader = DataLoader(HDF5SampleDataset(self.file_path, self.sim_group, train_indices, self.norm, self.fields_mean, self.fields_std, self.grid_size), batch_size=self.batch_size, shuffle=False)
+        self.val_loader = DataLoader(HDF5SampleDataset(self.file_path, self.sim_group, val_indices, self.norm, self.fields_mean, self.fields_std, self.grid_size), batch_size=self.batch_size, shuffle=False)
+        self.test_loader = DataLoader(HDF5SampleDataset(self.file_path, self.sim_group, test_indices, self.norm, self.fields_mean, self.fields_std, self.grid_size), batch_size=self.batch_size, shuffle=False)
 
         # Define train_dataset and test_dataset as lists of tensors (if you want to load them into memory)
         n_train = int(len(self.indices) * self.train_ratio)
@@ -179,19 +188,18 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
         self.test_dataset = None
         if test:
             with h5py.File(self.file_path, 'r') as f:
-                # Train dataset
-                #train_dataset = []
-                #for i in range(n_train):
-                #    sample = f['sims'][self.sim_group][self.indices[i]][:]
-                #    sample = np.transpose(sample, (3, 0, 1, 2)).astype(np.float16)
-                #    train_dataset.append(sample)
-                #self.train_dataset = torch.tensor(np.stack(train_dataset, axis=0), dtype=torch.float16)
-                # Test dataset
                 test_dataset = []
                 for i in range(len(self.indices) - n_test, len(self.indices)):
                     print(i)
                     sample = f['sims'][self.sim_group][self.indices[i]][:]
                     sample = np.transpose(sample, (3, 0, 1, 2)).astype(np.float16)
+                    # Crop a centered window of size grid_size x grid_size x grid_size
+                    c, d, h, w = sample.shape
+                    gs = self.grid_size
+                    start_d = (d - gs) // 2
+                    start_h = (h - gs) // 2
+                    start_w = (w - gs) // 2
+                    sample = sample[:, start_d:start_d+gs, start_h:start_h+gs, start_w:start_w+gs]
                     test_dataset.append(sample)
                 self.test_dataset = torch.tensor(np.stack(test_dataset, axis=0), dtype=torch.float16)
                 self.test_dataset = self.test_dataset[:self.num_samples]

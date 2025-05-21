@@ -104,8 +104,8 @@ def fm_ConFIG_step(model, xt, t, target, optimizer, config, operator):
 def train_flow_matching(config):
     # Load the dataset
     print("Loading dataset...")
-    #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size)
-    dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=config.Data.size, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=10)
+    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, field=None)
+    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=config.Data.size, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=config.Training.batch_size, num_samples=10)
 
     # Update the dataloaders
     train_loader = dataset.train_loader
@@ -152,7 +152,7 @@ def train_flow_matching(config):
 
         # Get the next batch from the train_loader
         for batch_idx, x1 in enumerate(train_loader):
-            print(f"Batch {batch_idx+1}/{len(train_loader)}")
+            #print(f"Batch {batch_idx+1}/{len(train_loader)}")
             
             # Ensure all elements in the batch are tensors
             x1 = torch.tensor(x1) if isinstance(x1, np.ndarray) else x1
@@ -259,6 +259,9 @@ if __name__ == "__main__":
         config = yaml.safe_load(f)
     config = utils.dict2namespace(config)
     print(config.device)
+    if torch.cuda.is_available():
+        print(f"CUDA current device: {torch.cuda.current_device()}")
+        print(f"CUDA device name: {torch.cuda.get_device_name(torch.cuda.current_device())}")
 
     # Train the model
     train_flow_matching(config)

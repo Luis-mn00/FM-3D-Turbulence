@@ -262,12 +262,15 @@ class Model_base(nn.Module):
         # middle
         self.mid = nn.Module()
         self.mid.block_1 = ResnetBlock(in_channels=block_in,
-                                       out_channels=block_in,
-                                       dropout=dropout)
-        self.mid.attn_1 = AttnBlock(block_in)
+                                    out_channels=block_in,
+                                    dropout=dropout)
+        if len(attn_resolutions) > 0:
+            self.mid.attn_1 = AttnBlock(block_in)
+        else:
+            self.mid.attn_1 = nn.Identity()
         self.mid.block_2 = ResnetBlock(in_channels=block_in,
-                                       out_channels=block_in,
-                                       dropout=dropout)
+                                    out_channels=block_in,
+                                    dropout=dropout)
 
         # upsampling
         self.up = nn.ModuleList()
