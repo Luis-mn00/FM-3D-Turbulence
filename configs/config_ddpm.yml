@@ -9,19 +9,19 @@ Data:
   size: 100
 
 Model:
-  ch: 64
+  ch: 32
   out_ch: 4
-  ch_mult: [1, 2, 4]
-  num_res_blocks: 2
+  ch_mult: [1, 2]
+  num_res_blocks: 1
   attn_resolutions: []
   dropout: 0.1
   in_channels: 4
   resamp_with_conv: true
-  save_path: "runs/045/epoch_10_0.4603_0.4311.pth"
+  save_path: "runs/024/epoch_50_0.0014_0.0386.pth"
 
 Training:
-  method: "PINN_dyn"
-  epochs: 10
+  method: "std"
+  epochs: 1000
   batch_size: 1
   learning_rate: 1e-4
   ddpm_loss_weight: 1e-3

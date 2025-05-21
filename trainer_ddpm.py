@@ -167,7 +167,7 @@ def train_ddpm(config):
 
         # Get the next batch from the train_loader
         for batch_idx, x1 in enumerate(train_loader):
-            print(f"Batch {batch_idx+1}/{len(train_loader)}")
+            #print(f"Batch {batch_idx+1}/{len(train_loader)}")
             optimizer.zero_grad()
             
             # Ensure all elements in the batch are tensors
@@ -201,6 +201,7 @@ def train_ddpm(config):
         val_loss = 0.0
         with torch.no_grad():
             for val_batch in val_loader:
+                val_batch = val_batch.to(config.device)  # Ensure val_batch is on the correct device
                 batch_size = val_batch.shape[0]
                 t = torch.randint(0, diffusion.num_timesteps, size=(batch_size,), device=val_batch.device)
                 x_t, noise = diffusion.forward(val_batch, t)

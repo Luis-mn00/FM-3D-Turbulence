@@ -56,17 +56,15 @@ class Diffusion():
     def ddpm(self, x_inp, model, t_start=None, plot_prog=False, grad=False):
         n = x_inp.size(0)
         t_start = self.num_timesteps if t_start is None else t_start
-
-        x     = x_inp[:, 0:3]
-        Re_ch = x_inp[:, 3:4]
+        x = x_inp
 
         for i in reversed(range(t_start)):
-            print(f"Step {i}/{t_start}")
+            #print(f"Step {i}/{t_start}")
             t = (torch.ones(n) * i).to(x.device)
             b = self.betas[i]
             a = self.alphas[i]
             a_b = self.alphas_b[i]
-            model_inp = torch.cat((x, Re_ch), dim=1) 
+            model_inp = x_inp
             e = model(model_inp, t)
 
             x = (1 / a.sqrt()) * (x - (b / (1 - a_b).sqrt()) * e) 

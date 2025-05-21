@@ -90,7 +90,7 @@ def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
     return x
 
 # Generate samples using the denoising model
-def generate_samples_with_denoiser(config, model, num_samples, t_start, reverse_steps, T):
+def generate_samples_with_denoiser(config, model, num_samples, t_start, reverse_steps, T, scaler):
     # Get the linear beta schedule
     betas, alphas_cumprod = get_linear_beta_schedule(T)
 
@@ -163,8 +163,8 @@ if __name__ == "__main__":
 
     # Generate samples using ODE integration
     num_samples = 10
-    #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, num_samples=num_samples, field=None)
-    dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True)
+    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, num_samples=num_samples, field=None)
+    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True)
     samples_gt = dataset.test_dataset
     for i in range(samples_gt.shape[0]):
         utils.plot_slice(samples_gt, i, 1, 63, f"gt_sample_{i}")
