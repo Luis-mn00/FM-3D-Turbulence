@@ -144,7 +144,7 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
             self.fields_std = f['norm_fields_sca_std'][:]
         if self.size is not None:
             self.indices = self.indices[:self.size]
-            
+              
         self.data_scaler = utils.StdScaler(self.fields_mean, self.fields_std)
 
         # Split indices for train/val/test

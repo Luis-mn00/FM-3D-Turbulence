@@ -10,15 +10,15 @@ Data:
   size: 10
 
 Model:
-  ch: 64
+  ch: 32
   out_ch: 4
-  ch_mult: [1, 2, 4]
-  num_res_blocks: 2
+  ch_mult: [1, 2]
+  num_res_blocks: 1
   attn_resolutions: []
   dropout: 0.1
   in_channels: 4
   resamp_with_conv: true
-  save_path: "runs/029/epoch_10_0.0188_0.0203.pth"
+  save_path: "runs/051/epoch_10_0.0500_0.0401.pth"
 
 Training:
   method: "std"

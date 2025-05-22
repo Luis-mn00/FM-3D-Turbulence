@@ -7,23 +7,23 @@ Data:
   field: "vorticity"
   norm: true
   shuffle: true
-  size: 10
+  size: 100
 
 Model:
-  ch: 64
+  ch: 32
   out_ch: 4
-  ch_mult: [1, 2, 4]
+  ch_mult: [1, 2]
   num_res_blocks: 2
   attn_resolutions: []
   dropout: 0.1
   in_channels: 4
   resamp_with_conv: true
-  save_path: "runs/047/epoch_10_0.0857_0.0802.pth"
+  save_path: "runs/039/epoch_10_0.0983_0.1797.pth"
 
 Training:
   method: "std"
   epochs: 10
-  batch_size: 4
+  batch_size: 1
   learning_rate: 1e-4
   divergence_loss_weight: 1e-3
   gamma: 0.98

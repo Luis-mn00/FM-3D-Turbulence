@@ -35,4 +35,4 @@ Diffusion:
   beta_end: 0.02
   mask_schedule_sig: 3
 
-device: "cpu"
+device: "cuda:3"

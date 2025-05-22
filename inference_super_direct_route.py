@@ -44,6 +44,7 @@ def fm_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_
     lsim = []
     
     for i in range(nsamples):
+        print(f"Sample {i+1}/{nsamples}")
         x     = samples_x[i].unsqueeze(0).to(config.device)
         y     = samples_y[i].unsqueeze(0).to(config.device)
         noise = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
@@ -55,8 +56,8 @@ def fm_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_
                                  f"super_direct_route_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
-        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred)**2)).item())
-        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y)**2)).item())
+        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :])**2)).item())
+        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :])**2)).item())
         residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
         # Detach tensors before passing them to LSiM_distance
         y = y.detach()
@@ -71,15 +72,15 @@ def fm_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_
 # Main script
 if __name__ == "__main__":
     print("Loading config...")
-    with open("configs/config_generative.yml", "r") as f:
+    with open("configs/config_direct_route.yml", "r") as f:
         config = yaml.safe_load(f)
     config = utils.dict2namespace(config)
     print(config.device)
     
     print("Loading dataset...")
-    num_samples = 10
+    num_samples = 1
     dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
-    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True)
+    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True, grid_size=config.Data.grid_size)
     samples_y = dataset.test_dataset
     perc = 5
     samples_x, samples_ids = utils.interpolate_dataset(samples_y, perc/100)

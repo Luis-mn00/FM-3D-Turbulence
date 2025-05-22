@@ -33,6 +33,7 @@ def sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids
     lsim = []
     
     for i in range(nsamples):
+        print(f"Sample {i+1}/{nsamples}")
         x     = samples_x[i].unsqueeze(0).to(config.device)
         y     = samples_y[i].unsqueeze(0).to(config.device)
 
@@ -43,8 +44,8 @@ def sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids
                                  f"super_regression_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
-        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred)**2)).item())
-        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y)**2)).item())
+        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :])**2)).item())
+        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :])**2)).item())
         residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
         # Detach tensors before passing them to LSiM_distance
         y = y.detach()
@@ -67,7 +68,7 @@ if __name__ == "__main__":
     print("Loading dataset...")
     num_samples = 10
     dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
-    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True)
+    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=config.Training.batch_size, num_samples=num_samples, test=False, grid_size=config.Data.grid_size)
     samples_y = dataset.test_dataset
     perc = 5
     samples_x, samples_ids = utils.interpolate_dataset(samples_y, perc/100)
@@ -75,4 +76,6 @@ if __name__ == "__main__":
     print("Loading model...")
     model = load_model(config, config.Model.save_path)
     
+    print(samples_x.shape)
+    print(samples_y.shape)
     sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc=perc)
