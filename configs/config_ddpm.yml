@@ -1,6 +1,6 @@
 Data:
   dt: 0.1
-  grid_size: 64
+  grid_size: 128
   seed: 1234
   crop: "crop"
   field: "vorticity"
@@ -17,12 +17,12 @@ Model:
   dropout: 0.1
   in_channels: 4
   resamp_with_conv: true
-  save_path: "runs/024/epoch_50_0.0014_0.0386.pth"
+  save_path: "runs/080/epoch_190_0.0009_0.0314.pth"
 
 Training:
   method: "std"
   epochs: 1000
-  batch_size: 1
+  batch_size: 2
   learning_rate: 1e-4
   ddpm_loss_weight: 1e-3
   gamma: 0.98
@@ -35,4 +35,4 @@ Diffusion:
   beta_end: 0.02
   mask_schedule_sig: 3
 
-device: "cuda:3"
+device: "cpu"

@@ -171,7 +171,7 @@ def train_flow_matching(config):
         batch_idx = 0
         for batch_Y in train_loader:
             batch_idx += 1
-            print(f"Batch {batch_idx}/{len(train_loader)}")
+            #print(f"Batch {batch_idx}/{len(train_loader)}")
             
             batch_X, samples_ids = utils.interpolate_dataset(batch_Y, config.Data.perc / 100)
 

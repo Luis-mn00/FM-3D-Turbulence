@@ -90,7 +90,7 @@ def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
     return x
 
 # Generate samples using the denoising model
-def generate_samples_with_denoiser(config, model, num_samples, t_start, reverse_steps, T, scaler):
+def generate_samples_with_denoiser(config, model, num_samples, t_start, reverse_steps, T):
     # Get the linear beta schedule
     betas, alphas_cumprod = get_linear_beta_schedule(T)
 

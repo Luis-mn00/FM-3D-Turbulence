@@ -29,7 +29,7 @@ def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
 
     for i, j in zip(reversed(seq), reversed(next_seq)):
         t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)  # Normalize time to [1, 0]
-        t = 1 - t  # Invert to match FM
+        t = t_start - t * t_start
         print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
 
         alpha_bar_t = alphas_cumprod[i] if i < len(alphas_cumprod) else alphas_cumprod[-1]
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     config = utils.dict2namespace(config)
     print(config.device)
 
-    num_samples = 3
+    num_samples = 1
     dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
     #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True)
     samples_gt = dataset.test_dataset

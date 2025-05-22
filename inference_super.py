@@ -334,8 +334,8 @@ if __name__ == "__main__":
     print("Loading model...")
     model = load_model(config, config.Model.save_path)
     
-    #fm_interp_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc=perc)
-    #fm_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)
-    #fm_diff_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)
-    #ddpm_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)
+    fm_interp_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc=perc)
+    fm_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)
+    fm_diff_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)
+    ddpm_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)
     ddpm_diff_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)

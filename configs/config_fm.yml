@@ -17,10 +17,11 @@ Model:
   dropout: 0.1
   in_channels: 4
   resamp_with_conv: true
-  save_path: "runs/013/epoch_240_0.2047_0.1725.pth"
+  #save_path: "runs/013/epoch_240_0.2047_0.1725.pth"
+  save_path: "runs/077/epoch_60_0.2951_0.2749.pth"
 
 Training:
-  method: "PINN"
+  method: "ConFIG"
   epochs: 1000
   batch_size: 2
   learning_rate: 1e-4
@@ -29,4 +30,4 @@ Training:
   gamma: 0.98
   last_lr: 1e-5
 
-device: "cuda:3"
+device: "cuda:2"

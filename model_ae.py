@@ -186,7 +186,7 @@ class CVAE_3D_II(nn.Module):
             nn.BatchNorm3d(num_features=16),
             nn.ReLU(),
             nn.ConvTranspose3d(in_channels=16, out_channels=image_channels, kernel_size=4, stride=1, padding=0),
-            nn.BatchNorm3d(num_features=3)
+            nn.BatchNorm3d(num_features=image_channels)
         )
 
     def reparameterize(self, mu, logvar):
@@ -233,3 +233,82 @@ class CVAE_3D_II(nn.Module):
         # print("[INFO] logvar", logvar.size())
 
         return self.decode(z), mu, logvar, z_representation
+    
+class ResBlock3D(nn.Module):
+    def __init__(self, channels):
+        super(ResBlock3D, self).__init__()
+        self.block = nn.Sequential(
+            nn.Conv3d(channels, channels, kernel_size=3, padding=1),
+            nn.LeakyReLU(inplace=True),
+            nn.Conv3d(channels, channels, kernel_size=3, padding=1)
+        )
+        self.activation = nn.LeakyReLU(inplace=True)
+
+    def forward(self, x):
+        return self.activation(x + self.block(x))
+
+class SimpleAE3D(nn.Module):
+    def __init__(self, image_channels=1, z_dim=8, input_shape=(1, 32, 32, 32)):
+        super(SimpleAE3D, self).__init__()
+        print("[INFO] Initializing SimpleAE3D - Iteration 3 (Residual & Deeper)")
+
+        # ENCODER
+        self.encoder = nn.Sequential(
+            nn.Conv3d(image_channels, 32, kernel_size=3, stride=2, padding=1),
+            nn.LeakyReLU(),
+            ResBlock3D(32),
+
+            nn.Conv3d(32, 64, kernel_size=3, stride=2, padding=1),
+            nn.LeakyReLU(),
+            ResBlock3D(64),
+
+            nn.Conv3d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.LeakyReLU(),
+            ResBlock3D(128),
+
+            Flatten()
+        )
+
+        # Compute size after conv
+        with torch.no_grad():
+            dummy = torch.zeros(1, *input_shape)
+            h = self.encoder(dummy)
+            self.flattened_size = h.shape[1]
+
+        # LATENT SPACE
+        self.fc_enc = nn.Sequential(
+            nn.Linear(self.flattened_size, 512),
+            nn.LeakyReLU(),
+            nn.Linear(512, z_dim)
+        )
+
+        self.fc_dec = nn.Sequential(
+            nn.Linear(z_dim, 512),
+            nn.LeakyReLU(),
+            nn.Linear(512, self.flattened_size)
+        )
+
+        self.unflatten_shape = (128, input_shape[1]//8, input_shape[2]//8, input_shape[3]//8)
+
+        # DECODER
+        self.decoder = nn.Sequential(
+            UnFlatten(self.unflatten_shape),
+
+            nn.ConvTranspose3d(128, 64, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(),
+            ResBlock3D(64),
+
+            nn.ConvTranspose3d(64, 32, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(),
+            ResBlock3D(32),
+
+            nn.ConvTranspose3d(32, image_channels, kernel_size=4, stride=2, padding=1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        h = self.encoder(x)
+        z = self.fc_enc(h)
+        h_dec = self.fc_dec(z)
+        x_hat = self.decoder(h_dec)
+        return x_hat

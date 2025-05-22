@@ -6,11 +6,11 @@ Data:
   field: "vorticity"
   norm: true
   shuffle: true
-  size: 10
+  size: 100
 
 Model:
-  h_dim: 128
-  z_dim: 64
+  h_dim: 32
+  z_dim: 32
   in_channels: 4
   time_embed_dim: 128
   hidden_dim: 256
@@ -20,12 +20,12 @@ Model:
 
 Training:
   method: "std"
-  epochs: 10
-  batch_size: 1
-  learning_rate: 1e-4
+  epochs: 1000
+  batch_size: 5
+  learning_rate: 1e-3
   divergence_loss_weight: 1e-3
   gamma: 0.98
-  last_lr: 1e-5
+  last_lr: 1e-4
   sigma_min: 0.01
 
 device: "cpu"
