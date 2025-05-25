@@ -119,7 +119,8 @@ class IsotropicTurbulenceDataset:
     
     def __len__(self):
         return self.size
-    
+
+"""
 class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=32, num_samples=10, test=False, grid_size=128):
         self.file_path = file_path
@@ -289,8 +290,10 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
                     sample = f['sims'][self.sim_group][self.indices[idx]][:]
                     # Change shape from (512, 512, 512, C) to (C, 512, 512, 512)
                     sample = np.transpose(sample, (3, 0, 1, 2))
+                    #sample = sample[:3, :, :, :]
                     if self.norm:
                         sample = (sample - self.fields_mean) / self.fields_std
+                        #sample = (sample - self.fields_mean[:3, :, :, :]) / self.fields_std[:3, :, :, :]
                     # Crop a centered window of size grid_size x grid_size x grid_size
                     c, d, h, w = sample.shape
                     gs = self.grid_size
@@ -318,6 +321,7 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
                     print(i)
                     sample = f['sims'][self.sim_group][self.indices[i]][:]
                     sample = np.transpose(sample, (3, 0, 1, 2)).astype(np.float16)
+                    #sample = sample[:3, :, :, :]
                     # Crop a centered window of size grid_size x grid_size x grid_size
                     c, d, h, w = sample.shape
                     gs = self.grid_size
@@ -328,4 +332,3 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
                     test_dataset.append(sample)
                 self.test_dataset = torch.tensor(np.stack(test_dataset, axis=0), dtype=torch.float16)
                 self.test_dataset = self.test_dataset[:self.num_samples]
-"""

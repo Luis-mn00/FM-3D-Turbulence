@@ -18,7 +18,8 @@ Model:
   in_channels: 4
   resamp_with_conv: true
   #save_path: "runs/013/epoch_240_0.2047_0.1725.pth"
-  save_path: "runs/077/epoch_60_0.2951_0.2749.pth"
+  #save_path: "runs/077/epoch_60_0.2951_0.2749.pth"
+  save_path: "runs/082/epoch_490_0.2301_0.1650.pth"
 
 Training:
   method: "ConFIG"

@@ -6,7 +6,7 @@ Data:
   field: "vorticity"
   norm: true
   shuffle: true
-  size: 100
+  size: 500
 
 Model:
   ch: 32
@@ -35,4 +35,4 @@ Diffusion:
   beta_end: 0.02
   mask_schedule_sig: 3
 
-device: "cpu"
+device: "cuda:2"

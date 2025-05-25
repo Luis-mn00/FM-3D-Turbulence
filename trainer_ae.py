@@ -14,7 +14,7 @@ import wandb
 from conflictfree.utils import get_gradient_vector
 from conflictfree.grad_operator import ConFIGOperator
 
-from model_ae import CVAE_3D, CVAE_3D_II, SimpleAE3D
+from model_ae import CVAE_3D, CVAE_3D_II, UNetAutoencoder
 from loss import schedule_KL_annealing
 from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
@@ -31,7 +31,7 @@ def standard_step(model, batch, kl_weight, optimizer, config):
     # call CVAE model
     # feeding 3D volume to Conv3D: https://discuss.pytorch.org/t/feeding-3d-volumes-to-conv3d/32378/6
     #recon_batch, mu, logvar, _ = model(batch)
-    recon_batch = model(batch)
+    recon_batch, _ = model(batch)
 
     # compute batch losses
     mse_loss = torch.nn.MSELoss(reduction='sum')(recon_batch, batch)
@@ -138,7 +138,7 @@ def train_ae(config):
     
     # instantiate model and initialize network weights
     #model = CVAE_3D_II(image_channels=config.Model.in_channels, h_dim=config.Model.h_dim, z_dim=config.Model.z_dim, input_shape=(config.Model.in_channels, dataset.Nx, dataset.Ny, dataset.Nz)).to(device=config.device, dtype=torch.float)
-    model = SimpleAE3D(image_channels=config.Model.in_channels, z_dim=config.Model.z_dim, input_shape=(config.Model.in_channels, dataset.Nx, dataset.Ny, dataset.Nz)).to(device=config.device, dtype=torch.float)
+    model = UNetAutoencoder(config).to(device=config.device, dtype=torch.float)
     #model.apply(utils.init_weights) # xavier initialization
     
     # Convert learning_rate and divergence_loss_weight to float if they are strings
@@ -186,6 +186,7 @@ def train_ae(config):
         # Get the next batch from the train_loader
         for batch_idx, x1 in enumerate(train_loader):
             #print(f"Batch {batch_idx+1}/{len(train_loader)}")
+            #print(x1.shape)
 
             # Perform the training step
             if config.Training.method == "std":
@@ -217,7 +218,7 @@ def train_ae(config):
                 # move data into GPU tensors
                 val_batch = val_batch.to(config.device)
                 #recon_batch, mu, logvar, _ = model(val_batch)
-                recon_batch = model(val_batch)
+                recon_batch, _ = model(val_batch)
                 mse_loss = torch.nn.MSELoss(reduction='sum')(recon_batch, val_batch)
                 val_loss += mse_loss.item()
 
@@ -237,15 +238,18 @@ def train_ae(config):
             param_group['lr'] = new_lr
 
         # Save checkpoint every 10 epochs
-        if (epoch + 1) % 10 == 0:
-            checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{epoch_BCE_loss:.4f}_{val_loss:.4f}.pth")
-            torch.save(model.state_dict(), checkpoint_path)
-            print(f"Saved checkpoint: {checkpoint_path}")
+        #if (epoch + 1) % 10 == 0:
+        #    checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{epoch_BCE_loss:.4f}_{val_loss:.4f}.pth")
+        #    torch.save(model.state_dict(), checkpoint_path)
+        #    print(f"Saved checkpoint: {checkpoint_path}")
 
         # Log the epoch loss and validation loss
         print(f"Epoch [{epoch + 1}/{config.Training.epochs}], Loss: {epoch_BCE_loss:.4f}, Validation Loss: {val_loss:.4f}")
         
     wandb.finish()
+    
+    checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{epoch_BCE_loss:.4f}_{val_loss:.4f}.pth")
+    torch.save(model.state_dict(), checkpoint_path)
 
     # Plot losses after training
     plt.figure()
