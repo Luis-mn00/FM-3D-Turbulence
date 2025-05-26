@@ -11,8 +11,9 @@ from conflictfree.grad_operator import ConFIGOperator
 
 from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
-from model_latent import LatentModel
 from my_config_length import UniProjectionLength
+from model_simple import Model_base
+from model_ae import CVAE_3D_II
 from model_vqvae import VQVAE, VAE, AE
 
 wandb.login(key="f4a726b2fe7929990149e82fb88da423cfa74e46")
@@ -51,9 +52,9 @@ def create_dataloader(low_res_images, high_res_images, batch_size):
     return DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
 # Define the training function
-def train_flow_matching(config):
+def train_flow_matching(config, config_ae):
     # Load the dataset
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size)
+    dataset = IsotropicTurbulenceDataset(dt=config_ae.Data.dt, grid_size=config_ae.Data.grid_size, crop=config_ae.Data.crop, seed=config_ae.Data.seed, size=config_ae.Data.size, batch_size=config.Training.batch_size)
     #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=config.Training.batch_size)
 
     # Update the dataloaders
@@ -61,15 +62,19 @@ def train_flow_matching(config):
     val_loader = dataset.val_loader
     test_loader = dataset.test_loader
     
-    #ae = VQVAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+    # Load the pre-trained autoencoder
+    #model = VQVAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
     #             num_embedding=config.Model.num_embedding, device=config.device).to(config.device)
-    ae = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
-                device=config.device).to(config.device)
-    #ae = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
-    #            device=config.device).to(config.device)
-
+    #model = AE(input_size=config.Model.in_channels, image_size=config.Data.grid_size, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+    #            device=config.device, z_dim=config.Model.z_dim).to(config.device)
+    ae = VAE(input_size=config_ae.Model.in_channels, hidden_size=config_ae.Model.hidden_size, depth=config_ae.Model.depth, num_res_block=config_ae.Model.num_res_block, res_size=config_ae.Model.res_size, embedding_size=config_ae.Model.embedding_size,
+                device=config_ae.device).to(config.device)
+    ae.load_state_dict(torch.load(config_ae.Model.ae_path, map_location=config.device))
+    ae.eval()
+    for param in ae.parameters():
+        param.requires_grad = False
     # Initialize the model
-    model = LatentModel(config)
+    model = Model_base(config)
     model = model.to(config.device)
 
     # Convert learning_rate and divergence_loss_weight to float if they are strings
@@ -119,8 +124,10 @@ def train_flow_matching(config):
             x0 = torch.tensor(batch_X) if isinstance(batch_X, np.ndarray) else batch_X
             
             # Apply encoder to x0 and x1
-            z1 = ae.encode(x1)
-            z0 = ae.encode(x0)
+            mu1, logvar1 = ae.encode(x1)
+            mu0, logvar0 = ae.encode(x0)
+            z1 = ae.reparameterize(mu1, logvar1)
+            z0 = ae.reparameterize(mu0, logvar0)
             
             target = z1 - (1 - config.Training.sigma_min) * z0
             target = target.to(config.device)
@@ -150,8 +157,10 @@ def train_flow_matching(config):
                 x0 = torch.tensor(batch_X) if isinstance(batch_X, np.ndarray) else batch_X
                 
                 # Apply encoder to x0 and x1
-                z1 = ae.encode(x1)
-                z0 = ae.encode(x0)
+                mu1, logvar1 = ae.encode(x1)
+                mu0, logvar0 = ae.encode(x0)
+                z1 = ae.reparameterize(mu1, logvar1)
+                z0 = ae.reparameterize(mu0, logvar0)
                 
                 target = z1 - (1 - config.Training.sigma_min) * z0
                 target = target.to(config.device)
@@ -204,10 +213,15 @@ def train_flow_matching(config):
 if __name__ == "__main__":
     # Load the configuration
     print("Loading config...")
-    with open("configs/config_vqvae.yml", "r") as f:
+    with open("configs/config_lfm.yml", "r") as f:
         config = yaml.safe_load(f)
     config = utils.dict2namespace(config)
     print(config.device)
+    
+    print("Loading config...")
+    with open("configs/config_vqvae.yml", "r") as f:
+        config_ae = yaml.safe_load(f)
+    config_ae = utils.dict2namespace(config_ae)
 
     # Train the model
-    train_flow_matching(config)
+    train_flow_matching(config, config_ae)

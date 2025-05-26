@@ -36,12 +36,13 @@ def load_ae_model(config):
 
 # Flow matching interpolation in latent space
 
-def fm_interp_latent(model, z_lr, z_hr, steps):
-    zt = z_lr
+def fm_interp_latent(model, z, z_lr, steps):
+    zt = z
     for i, t in enumerate(torch.linspace(0, 1, steps, device=zt.device, dtype=torch.float32), start=1):
         #print(f"Latent Step {i}/{steps}")
         pred = model(zt, t.expand(zt.size(0)))
-        zt = zt + (1 / steps) * (z_hr - zt + t * pred)
+        zt = zt + (1 / steps) * (z_lr - zt + t * pred)
+        
     return zt
     
 def fm_interp_sparse_experiment_latent(config, config_ae, model, ae, nsamples, samples_x, samples_y, samples_ids, perc):
@@ -54,14 +55,17 @@ def fm_interp_sparse_experiment_latent(config, config_ae, model, ae, nsamples, s
         print(f"Sample {i+1}/{nsamples}")
         x = samples_x[i].unsqueeze(0).to(config.device)
         y = samples_y[i].unsqueeze(0).to(config.device)
+        noise = torch.randn((1, config_ae.Model.in_channels, config_ae.Data.grid_size, config_ae.Data.grid_size, config_ae.Data.grid_size), device=config.device).float()
         # Encode to latent space
         with torch.no_grad():
             mu1, logvar1 = ae.encode(x)
             z_lr = ae.reparameterize(mu1, logvar1)
             mu2, logvar2 = ae.encode(y)
             z_hr = ae.reparameterize(mu2, logvar2)
+            mu3, logvar3 = ae.encode(noise)
+            z_noise = ae.reparameterize(mu3, logvar3)
         # Flow matching in latent space
-        z_pred = fm_interp_latent(model, z_lr, z_hr, steps=10)
+        z_pred = fm_interp_latent(model, z_noise, z_lr, steps=10)
         # Decode back to physical space
         with torch.no_grad():
             y_pred = ae.decode(z_pred)
@@ -236,6 +240,6 @@ if __name__ == "__main__":
     samples_x, samples_ids = utils.interpolate_dataset(samples_y, perc/100)
     
     print("Generating samples (latent FM)...")
-    #fm_interp_sparse_experiment_latent(config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids, perc=perc)
-    fm_mask_sparse_experiment_latent(config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids, perc)
-    fm_diff_mask_sparse_experiment_latent(config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids, perc)
+    fm_interp_sparse_experiment_latent(config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids, perc=perc)
+    #fm_mask_sparse_experiment_latent(config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids, perc)
+    #fm_diff_mask_sparse_experiment_latent(config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids, perc)
