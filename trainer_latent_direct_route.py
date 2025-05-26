@@ -1,6 +1,6 @@
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 import numpy as np
 import os
 import yaml
@@ -11,14 +11,13 @@ from conflictfree.grad_operator import ConFIGOperator
 
 from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
-from my_config_length import UniProjectionLength
 from model_latent import LatentModel
-from model_ae import CVAE_3D_II
+from my_config_length import UniProjectionLength
 from model_vqvae import VQVAE, VAE, AE
 
 wandb.login(key="f4a726b2fe7929990149e82fb88da423cfa74e46")
 
-wandb.init(project="Latent fm")
+wandb.init(project="fm")
 
 def fm_standard_step(model, xt, t, target, optimizer, config):
     # Forward pass
@@ -33,17 +32,41 @@ def fm_standard_step(model, xt, t, target, optimizer, config):
     
     return total_loss, loss
 
+class RegressionDataset(Dataset):
+    def __init__(self, low_res_images, high_res_images):
+        self.low_res_images = low_res_images
+        self.high_res_images = high_res_images
+
+    def __len__(self):
+        return len(self.low_res_images)
+
+    def __getitem__(self, idx):
+        low_res = self.low_res_images[idx]
+        high_res = self.high_res_images[idx]
+
+        return low_res, high_res
+
+def create_dataloader(low_res_images, high_res_images, batch_size):
+    dataset = RegressionDataset(low_res_images, high_res_images)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
 # Define the training function
 def train_flow_matching(config):
     # Load the dataset
-    print("Loading dataset...")
     dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size)
-    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=config.Training.batch_size, grid_size=config.Data.grid_size)
+    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=config.Training.batch_size)
 
     # Update the dataloaders
     train_loader = dataset.train_loader
     val_loader = dataset.val_loader
     test_loader = dataset.test_loader
+    
+    #ae = VQVAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+    #             num_embedding=config.Model.num_embedding, device=config.device).to(config.device)
+    ae = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+                device=config.device).to(config.device)
+    #ae = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+    #            device=config.device).to(config.device)
 
     # Initialize the model
     model = LatentModel(config)
@@ -74,15 +97,6 @@ def train_flow_matching(config):
     run_dir = os.path.join(runs_dir, next_run)
     os.makedirs(run_dir, exist_ok=True)
 
-    # Load the pre-trained autoencoder
-    #ae = CVAE_3D_II(image_channels=config.Model.in_channels, h_dim=config.Model.h_dim, z_dim=config.Model.z_dim, input_shape=(config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size))
-    ae = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
-                device=config.device).to(config.device)
-    ae.load_state_dict(torch.load(config.Model.ae_path, map_location=config.device))
-    ae.eval()
-    for param in ae.parameters():
-        param.requires_grad = False
-
     # Training loop with validation loss
     print("Starting training...")
     mse_losses = []
@@ -92,26 +106,34 @@ def train_flow_matching(config):
         epoch_loss = 0.0
         mse_loss = 0.0
 
-        for batch_idx, x1 in enumerate(train_loader):
-            print(f"Batch {batch_idx+1}/{len(train_loader)}")
-            x1 = torch.tensor(x1) if isinstance(x1, np.ndarray) else x1
-            x0 = torch.randn_like(x1)
-            x1 = x1.to(config.device)
-            x0 = x0.to(config.device)
+        # Get the next batch from the train_loader
+        batch_idx = 0
+        for batch_Y in train_loader:
+            batch_idx += 1
+            #print(f"Batch {batch_idx}/{len(train_loader)}")
+            
+            batch_X, samples_ids = utils.interpolate_dataset(batch_Y, config.Data.perc / 100)
 
-            # Encode to latent space
-            with torch.no_grad():
-                #z1, _, _ = ae.encode(x1)
-                #z0, _, _ = ae.encode(x0)
-                z1 = ae.encode(x1)
-                z0 = ae.encode(x0)
-
+            # Ensure all elements in the batch are tensors
+            x1 = torch.tensor(batch_Y) if isinstance(batch_Y, np.ndarray) else batch_Y
+            x0 = torch.tensor(batch_X) if isinstance(batch_X, np.ndarray) else batch_X
+            
+            # Apply encoder to x0 and x1
+            z1 = ae.encode(x1)
+            z0 = ae.encode(x0)
+            
             target = z1 - (1 - config.Training.sigma_min) * z0
-            t = torch.rand(z1.size(0), device=config.device)
-            zt = (1 - (1 - config.Training.sigma_min) * t[:, None]) * z0 + t[:, None] * z1
+            target = target.to(config.device)
 
-            # Flow matching in latent space
+            # Sample random time steps
+            t = torch.rand(x1.size(0), device=config.device)
+
+            # Interpolate between x0 and x1
+            zt = (1 - (1 - config.Training.sigma_min) * t[:, None, None, None, None]) * z0 + t[:, None, None, None, None] * z1
+            
+            # Perform the training step
             total_loss, loss = fm_standard_step(model, zt, t, target, optimizer, config)
+                
             epoch_loss += total_loss.item()
             mse_loss += loss.item()
             
@@ -122,21 +144,24 @@ def train_flow_matching(config):
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
-            for val_batch in val_loader:
-                x1 = val_batch
-                x0 = torch.randn_like(x1)
-                x1 = x1.to(config.device)
-                x0 = x0.to(config.device)
-                #z1, _, _ = ae.encode(x1)
-                #z0, _, _ = ae.encode(x0)
+            for batch_Y in val_loader:
+                batch_X, samples_ids = utils.interpolate_dataset(batch_Y, config.Data.perc / 100)
+                x1 = torch.tensor(batch_Y) if isinstance(batch_Y, np.ndarray) else batch_Y
+                x0 = torch.tensor(batch_X) if isinstance(batch_X, np.ndarray) else batch_X
+                
+                # Apply encoder to x0 and x1
                 z1 = ae.encode(x1)
                 z0 = ae.encode(x0)
+                
                 target = z1 - (1 - config.Training.sigma_min) * z0
-                t = torch.rand(z1.size(0), device=config.device)
-                zt = (1 - (1 - config.Training.sigma_min) * t[:, None]) * z0 + t[:, None] * z1
+                target = target.to(config.device)
+
+                t = torch.rand(x1.size(0), device=config.device)
+                zt = (1 - t[:, None, None, None, None]) * z0 + t[:, None, None, None, None] * z1
+
                 pred = model(zt, t)
                 val_loss += ((target - pred) ** 2).mean().item()
-                
+
         val_loss /= len(val_loader)
         val_losses.append(val_loss)
         

@@ -193,3 +193,157 @@ class VQVAE(nn.Module):
             else:
                 raise ValueError('Not valid d_mode')
         return output
+
+class VAE(nn.Module):
+    def __init__(self, input_size=3, hidden_size=128, depth=2, num_res_block=2, res_size=32,
+                embedding_size=64, d_mode=['exact', 'physics'], d_commit=[0.1, 0.0001],
+                loss_power_vg=2, device='cpu'):
+        super().__init__()
+        self.encoder = Encoder(input_size, hidden_size, embedding_size * 2, num_res_block, res_size, stride=2 ** depth)
+        self.decoder = Decoder(embedding_size, input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
+        self.embedding_size = embedding_size
+        self.d_mode = d_mode
+        self.d_commit = d_commit
+        self.loss_power = loss_power_vg
+        self.device = device
+
+    def encode(self, x):
+        encoded = self.encoder(x)
+        # Split last channel into mean and logvar
+        mu, logvar = torch.chunk(encoded, 2, dim=1)
+        return mu, logvar
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def decode(self, z):
+        return self.decoder(z)
+
+    def forward(self, input, Epoch=None):
+        output = {'loss': torch.tensor(0, device=self.device, dtype=torch.float32)}
+        x = input['uvw']
+        mu, logvar = self.encode(x)
+        z = self.reparameterize(mu, logvar)
+        decoded = self.decode(z)
+        output['uvw'] = decoded
+        output['duvw'] = utils.spectral_derivative_3d(output['uvw'])
+
+        # Reconstruction loss
+        recon_loss = F.mse_loss(output['uvw'], input['uvw'])
+
+        # KL divergence loss
+        kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) / x.numel()
+
+        output['loss'] = recon_loss + kl_loss
+
+        for i in range(len(self.d_mode)):
+            if self.d_mode[i] == 'exact':
+                output['loss'] += self.d_commit[i] * utils.weighted_mse_loss(output['duvw'], input['duvw'])
+            elif self.d_mode[i] == 'physics':
+                if Epoch and (Epoch > 25):
+                    output['loss'] += self.d_commit[i] * utils.physics(output['duvw'], input['duvw'])
+            else:
+                raise ValueError('Not valid d_mode')
+
+        return output
+    
+class VAE(nn.Module):
+    def __init__(self, input_size=3, hidden_size=128, depth=2, num_res_block=2, res_size=32,
+                embedding_size=64, d_mode=['exact', 'physics'], d_commit=[0.1, 0.0001],
+                loss_power_vg=2, device='cpu'):
+        super().__init__()
+        self.encoder = Encoder(input_size, hidden_size, embedding_size * 2, num_res_block, res_size, stride=2 ** depth)
+        self.decoder = Decoder(embedding_size, input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
+        self.embedding_size = embedding_size
+        self.d_mode = d_mode
+        self.d_commit = d_commit
+        self.loss_power = loss_power_vg
+        self.device = device
+
+    def encode(self, x):
+        encoded = self.encoder(x)
+        # Split last channel into mean and logvar
+        mu, logvar = torch.chunk(encoded, 2, dim=1)
+        return mu, logvar
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def decode(self, z):
+        return self.decoder(z)
+
+    def forward(self, input, Epoch=None):
+        output = {'loss': torch.tensor(0, device=self.device, dtype=torch.float32)}
+        x = input['uvw']
+        mu, logvar = self.encode(x)
+        z = self.reparameterize(mu, logvar)
+        decoded = self.decode(z)
+        output['uvw'] = decoded
+        output['duvw'] = utils.spectral_derivative_3d(output['uvw'])
+
+        # Reconstruction loss
+        recon_loss = F.mse_loss(output['uvw'], input['uvw'])
+
+        # KL divergence loss
+        kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) / x.numel()
+
+        output['loss'] = recon_loss + kl_loss
+
+        for i in range(len(self.d_mode)):
+            if self.d_mode[i] == 'exact':
+                output['loss'] += self.d_commit[i] * utils.weighted_mse_loss(output['duvw'], input['duvw'])
+            elif self.d_mode[i] == 'physics':
+                if Epoch and (Epoch > 25):
+                    output['loss'] += self.d_commit[i] * utils.physics(output['duvw'], input['duvw'])
+            else:
+                raise ValueError('Not valid d_mode')
+
+        return output
+    
+class AE(nn.Module):
+    def __init__(self, input_size=3, hidden_size=128, depth=2, num_res_block=2, res_size=32,
+                embedding_size=64, d_mode=['exact', 'physics'], d_commit=[0.1, 0.0001],
+                loss_power_vg=2, device='cpu'):
+        super().__init__()
+        self.encoder = Encoder(input_size, hidden_size, embedding_size * 2, num_res_block, res_size, stride=2 ** depth)
+        self.decoder = Decoder(embedding_size, input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
+        self.embedding_size = embedding_size
+        self.d_mode = d_mode
+        self.d_commit = d_commit
+        self.loss_power = loss_power_vg
+        self.device = device
+
+    def encode(self, x):
+        encoded = self.encoder(x)
+        return encoded
+
+    def decode(self, z):
+        return self.decoder(z)
+
+    def forward(self, input, Epoch=None):
+        output = {'loss': torch.tensor(0, device=self.device, dtype=torch.float32)}
+        x = input['uvw']
+        z = self.encode(x)
+        decoded = self.decode(z)
+        output['uvw'] = decoded
+        output['duvw'] = utils.spectral_derivative_3d(output['uvw'])
+
+        # Reconstruction loss
+        recon_loss = F.mse_loss(output['uvw'], input['uvw'])
+
+        output['loss'] = recon_loss
+
+        for i in range(len(self.d_mode)):
+            if self.d_mode[i] == 'exact':
+                output['loss'] += self.d_commit[i] * utils.weighted_mse_loss(output['duvw'], input['duvw'])
+            elif self.d_mode[i] == 'physics':
+                if Epoch and (Epoch > 25):
+                    output['loss'] += self.d_commit[i] * utils.physics(output['duvw'], input['duvw'])
+            else:
+                raise ValueError('Not valid d_mode')
+
+        return output

@@ -14,7 +14,7 @@ import wandb
 from conflictfree.utils import get_gradient_vector
 from conflictfree.grad_operator import ConFIGOperator
 
-from model_vqvae import VQVAE
+from model_vqvae import VQVAE, VAE, AE
 from loss import schedule_KL_annealing
 from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
@@ -36,8 +36,12 @@ def train_ae(config):
     
     # instantiate model and initialize network weights
     
-    model = VQVAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
-                 num_embedding=config.Model.num_embedding, device=config.device).to(config.device)
+    #model = VQVAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+    #             num_embedding=config.Model.num_embedding, device=config.device).to(config.device)
+    model = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+                device=config.device).to(config.device)
+    #model = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+    #            device=config.device).to(config.device)
     
     # Convert learning_rate and divergence_loss_weight to float if they are strings
     if isinstance(config.Training.learning_rate, str):

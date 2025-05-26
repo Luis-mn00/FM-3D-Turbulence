@@ -10,7 +10,7 @@ import random
 
 from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
-from model_simple import Model_base
+from model_vqvae import VQVAE, VAE, AE
 
 # Create a folder to save plots
 plot_folder = "generated_plots"
@@ -18,7 +18,12 @@ os.makedirs(plot_folder, exist_ok=True)
 
 # Load the trained model
 def load_model(config, model_path):
-    model = Model_base(config)
+    #model = VQVAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+    #             num_embedding=config.Model.num_embedding, device=config.device).to(config.device)
+    model = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+                device=config.device).to(config.device)
+    #model = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+    #            device=config.device).to(config.device)
     model.load_state_dict(torch.load(model_path, map_location=config.device))
     model = model.to(config.device)
     model.eval()
@@ -27,13 +32,14 @@ def load_model(config, model_path):
 def show_recons(model, samples_x):
     for i in range(samples_x.shape[0]):
         sample = samples_x[i]
+        sample = sample.unsqueeze(0)
         sample = sample.to(config.device)
         input = {'uvw': sample, 'duvw': utils.spectral_derivative_3d(sample)}
         output = model(input)
         output = output['uvw']
         
-        utils.plot_slice(sample, 0, 0, 62, name=f"vqvae_input_{i}")
-        utils.plot_slice(output, 0, 0, 62, name=f"vqvae_output_{i}")
+        utils.plot_slice(sample.cpu().detach().numpy(), 0, 0, 62, name=f"vqvae_input_{i}")
+        utils.plot_slice(output.cpu().detach().numpy(), 0, 0, 62, name=f"vqvae_output_{i}")
 
 # Main script
 if __name__ == "__main__":
@@ -50,5 +56,7 @@ if __name__ == "__main__":
     samples_x = dataset.test_dataset
 
     print("Loading model...")
-    model = load_model(config, config.Model.save_path)
+    model = load_model(config, config.Model.ae_path)
+    
+    show_recons(model, samples_x)
     

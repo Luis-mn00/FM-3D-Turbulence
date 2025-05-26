@@ -10,22 +10,12 @@ import random
 
 from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
-from model_simple import Model_base
-from model_ae import Autoencoder
 from model_latent import LatentModel
+from model_vqvae import VQVAE, VAE, AE
 
 # Create a folder to save plots
 plot_folder = "generated_plots"
 os.makedirs(plot_folder, exist_ok=True)
-
-def load_autoencoder(config, ae_path):
-    ae = Autoencoder(config)
-    ae.load_state_dict(torch.load(ae_path, map_location=config.device))
-    ae = ae.to(config.device)
-    ae.eval()
-    for p in ae.parameters():
-        p.requires_grad = False
-    return ae
 
 def load_latent_fm_model(config, model_path):
     model = LatentModel(config)
@@ -33,6 +23,14 @@ def load_latent_fm_model(config, model_path):
     model = model.to(config.device)
     model.eval()
     return model
+
+def load_ae_model(config):
+    ae = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+            device=config.device).to(config.device)
+    ae.load_state_dict(torch.load(config.Model.lfm_path, map_location=config.device))
+    ae = model.to(config.device)
+    ae.eval()
+    return ae
 
 # Flow matching interpolation in latent space
 
@@ -78,6 +76,130 @@ def fm_interp_sparse_experiment_latent(config, model, ae, nsamples, samples_x, s
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
 
+def fm_mask(fm_model, ae_model, x, x_lr, steps, mask):
+    # Step 1: Encode inputs to latent space
+    z = ae_model.encoder(x)             # latent high-resolution
+    z_lr = ae_model.encoder(x_lr)       # latent low-resolution
+
+    zt = z                              # Start FM from high-res latent
+    for i, t in enumerate(torch.linspace(0, 1, steps, device=z.device, dtype=torch.float32), start=1):
+        print(f"Step {i}/{steps}")
+        if t > (1 - 1e-3):
+            t = torch.tensor([1 - 1e-3], device=z.device)
+        mask_t = mask * (1 - t)
+
+        # Flow Matching model prediction in latent space
+        pred = fm_model(zt, t.expand(zt.size(0)))  # predicted vector field
+        z1_pred = zt + (1 - t) * pred              # latent prediction
+
+        # Decode to physical space to apply masking
+        x1_pred = ae_model.decoder(z1_pred)
+
+        # Apply mask in physical space
+        x_masked = (1 - mask_t) * x1_pred + mask_t * x_lr
+
+        # Re-encode to latent space
+        z_masked = ae_model.encoder(x_masked)
+
+        # Euler update step in latent space
+        zt = zt + (1 / steps) * (z_masked - zt) / (1 - t)
+
+    # Final decoding back to physical space
+    x_final = ae_model.decoder(zt)
+    return x_final
+
+
+def fm_mask_sparse_experiment_latent(config, model, ae, nsamples, samples_x, samples_y, samples_ids, perc):
+    
+    losses = []
+    residuals = []
+    residuals_gt = []
+    residuals_diff = []
+    lsim = []
+    
+    for i in range(nsamples):
+        print(f"Sample {i+1}/{nsamples}")
+        x     = samples_x[i].unsqueeze(0).to(config.device)
+        y     = samples_y[i].unsqueeze(0).to(config.device)
+        noise = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
+
+        mask = torch.zeros(config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).flatten()
+        mask[samples_ids[i]] = 1
+        mask = mask.reshape(config.Data.grid_size, config.Data.grid_size, config.Data.grid_size)
+        mask = mask.unsqueeze(0).unsqueeze(0)  # (1, 1, D, D, D)
+        mask = mask.repeat(1, config.Model.in_channels, 1, 1, 1)  # (1, C, D, D, D)
+        mask = mask.to(config.device)
+        mask_tmp = torch.rand(noise.shape, device=noise.device) < 1.0
+        mask = torch.clamp(mask + mask_tmp, max=1)
+
+        y_pred = fm_mask(model, ae, noise.clone(), x.clone(), 10, mask)
+        utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
+                                 y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
+                                 y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
+                                 f"super_mask_{i}")
+
+        losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
+        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :])**2)).item())
+        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :])**2)).item())
+        residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
+        # Detach tensors before passing them to LSiM_distance
+        y = y.detach()
+        y_pred = y_pred.detach()
+        lsim.append(utils.LSiM_distance(y, y_pred))
+        
+    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
+    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
+    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
+    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+    
+def fm_diff_mask_sparse_experiment_latent(config, model, ae, nsamples, samples_x, samples_y, samples_ids, perc, w_mask=1, sig=0.044):
+    
+    losses = []
+    residuals = []
+    residuals_gt = []
+    residuals_diff = []
+    lsim = []
+    
+    diffuse_masks = torch.zeros(len(samples_ids), config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
+    for j in range(len(samples_ids)):
+        # Use the correct number of total voxels for 3D
+        total_voxels = config.Data.grid_size ** 3
+        ids = list(samples_ids[j]) + random.sample(range(total_voxels), int(total_voxels * w_mask))
+        mask = utils.diffuse_mask(
+            ids, A=1, sig=sig,
+            Nx=config.Data.grid_size,
+            Ny=config.Data.grid_size,
+            Nz=config.Data.grid_size
+        )
+        diffuse_masks[j] = torch.tensor(mask, dtype=torch.float).unsqueeze(0).repeat(config.Model.in_channels, 1, 1, 1)
+    
+    for i in range(nsamples):
+        print(f"Sample {i+1}/{nsamples}")
+        x     = samples_x[i].unsqueeze(0).to(config.device)
+        y     = samples_y[i].unsqueeze(0).to(config.device)
+        noise = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
+
+        y_pred = fm_mask(model, ae, noise.clone(), x.clone(), 10, diffuse_masks[i].unsqueeze(0))
+        utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
+                                 y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
+                                 y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
+                                 f"super_diff_mask_{i}")
+
+        losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
+        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :])**2)).item())
+        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :])**2)).item())
+        residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
+        # Detach tensors before passing them to LSiM_distance
+        y = y.detach()
+        y_pred = y_pred.detach()
+        lsim.append(utils.LSiM_distance(y, y_pred))
+        
+    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
+    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
+    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
+    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+
+
 # Main script
 if __name__ == "__main__":
     print("Loading config...")
@@ -95,8 +217,10 @@ if __name__ == "__main__":
     samples_x, samples_ids = utils.interpolate_dataset(samples_y, perc/100)
 
     print("Loading autoencoder...")
-    ae = load_autoencoder(config, config.Model.ae_path)
+    ae = load_ae_model(config)
     print("Loading latent flow matching model...")
     model = load_latent_fm_model(config, config.Model.save_path)
     
     fm_interp_sparse_experiment_latent(config, model, ae, num_samples, samples_x, samples_y, samples_ids, perc=perc)
+    fm_mask_sparse_experiment_latent(config, model, ae, num_samples, samples_x, samples_y, samples_ids, perc)
+    fm_diff_mask_sparse_experiment_latent(config, model, ae, num_samples, samples_x, samples_y, samples_ids, perc)
