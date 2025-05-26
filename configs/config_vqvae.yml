@@ -15,17 +15,17 @@ Model:
   num_res_block: 2
   res_size: 32
   embedding_size: 512
+  z_dim: 512
   num_embedding: 1024
   time_embed_dim: 128
-  z_dim: 512
-  hidden_dim: 256
+  hidden_dim: 128
   n_layers: 3
-  ae_path: "runs/029/epoch_500_2.9201_4.4878.pth"
-  lfm_path: "runs/006/epoch_10_0.9957_1.1559.pth"
+  ae_path: "runs/029/epoch_500_1.1170_1.7672.pth"
+  
 
 Training:
   method: "std"
-  epochs: 500
+  epochs: 10
   batch_size: 1
   learning_rate: 1e-3
   divergence_loss_weight: 1e-3
@@ -33,4 +33,4 @@ Training:
   last_lr: 1e-4
   sigma_min: 0.01
 
-device: "cuda:0"
+device: "cpu"

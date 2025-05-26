@@ -8,7 +8,6 @@ from scipy.stats import wasserstein_distance_nd
 from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
 from model_simple import Model_base
-from model_latent import LatentModel
 #from model_ae import Autoencoder
 from model_vqvae import VQVAE, VAE, AE
 
@@ -18,7 +17,7 @@ os.makedirs(plot_folder, exist_ok=True)
 
 # Load the trained latent flow matching model
 def load_latent_model(config, model_path):
-    model = LatentModel(config)
+    model = Model_base(config)
     model.load_state_dict(torch.load(model_path, map_location=config.device))
     model = model.to(config.device)
     model.eval()
@@ -27,21 +26,22 @@ def load_latent_model(config, model_path):
 def load_ae_model(config):
     ae = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
             device=config.device).to(config.device)
-    ae.load_state_dict(torch.load(config.Model.lfm_path, map_location=config.device))
-    ae = model.to(config.device)
+    ae.load_state_dict(torch.load(config.Model.ae_path, map_location=config.device))
+    ae = ae.to(config.device)
     ae.eval()
     return ae
 
 # Integrate ODE and generate samples
-def integrate_ode_and_sample_latent(config, model, ae, num_samples=1, steps=10):
+def integrate_ode_and_sample_latent(config, config_ae, model, ae, num_samples=1, steps=10):
     model.eval().requires_grad_(False)
 
     samples = []
     for _ in range(num_samples):
         print(f"Generating sample {_+1}/{num_samples}")
         # Initialize random sample
-        xt = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device)
-        zt = ae.encode(xt)  # Encode the sample to latent space
+        xt = torch.randn((1, config_ae.Model.in_channels, config_ae.Data.grid_size, config_ae.Data.grid_size, config_ae.Data.grid_size), device=config.device)
+        mu, logvar = ae.encode(xt)
+        zt = ae.reparameterize(mu, logvar)
 
         for i, t in enumerate(torch.linspace(0, 1, steps, device=config.device), start=1):
             #print(f"Step {i}/{steps}")
@@ -103,7 +103,7 @@ def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
     return x
 
 # Generate samples using the denoising model
-def generate_samples_with_denoiser_latent(config, model, ae, num_samples, t_start, reverse_steps, T):
+def generate_samples_with_denoiser_latent(config, config_ae, model, ae, num_samples, t_start, reverse_steps, T):
     # Get the linear beta schedule
     betas, alphas_cumprod = get_linear_beta_schedule(T)
 
@@ -111,8 +111,9 @@ def generate_samples_with_denoiser_latent(config, model, ae, num_samples, t_star
     for _ in range(num_samples):
         print(f"Generating sample {_+1}/{num_samples}")
         # Ensure the input tensor is in float format to match the model's parameters
-        x = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
-        z = ae.encode(x)  # Encode the sample to latent space
+        x = torch.randn((1, config_ae.Model.in_channels, config_ae.Data.grid_size, config_ae.Data.grid_size, config_ae.Data.grid_size), device=config.device).float()
+        mu, logvar = ae.encode(x)
+        z = ae.reparameterize(mu, logvar)
         
         # Perform denoising using DDIM
         sample = ddim(z, model, t_start, reverse_steps, betas, alphas_cumprod)
@@ -167,30 +168,35 @@ def test_wasserstein(samples, samples_gt, config):
 if __name__ == "__main__":
     # Load the configuration
     print("Loading config...")
-    with open("configs/config_generative.yml", "r") as f:
+    with open("configs/config_lfm.yml", "r") as f:
         config = yaml.safe_load(f)
     config = utils.dict2namespace(config)
     print(config.device)
+    
+    print("Loading config...")
+    with open("configs/config_vqvae.yml", "r") as f:
+        config_ae = yaml.safe_load(f)
+    config_ae = utils.dict2namespace(config_ae)
 
     # Load the trained model
     print("Loading model...")
-    model = load_latent_model(config, config.Model.lfm_path)
+    model = load_latent_model(config, config.Model.save_path)
     print("Loading autoencoder...")
-    ae = load_ae_model(config)
+    ae = load_ae_model(config_ae)
 
     print("Generating samples (latent FM)...")
     num_samples = 10
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
+    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config_ae.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
     #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True, grid_size=config.Data.grid_size)
     samples_gt = dataset.test_dataset
 
-    samples_fm = integrate_ode_and_sample_latent(config, model, ae, num_samples=num_samples)
+    samples_fm = integrate_ode_and_sample_latent(config, config_ae, model, ae, num_samples=num_samples)
     for i, sample in enumerate(samples_fm):
-        utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
+        utils.plot_slice(sample, 0, 1, 63, f"generated_latent_sample_{i}")
 
-    samples_ddim = generate_samples_with_denoiser_latent(config, model, ae, num_samples, t_start=1000, reverse_steps=20, T=1000)
+    samples_ddim = generate_samples_with_denoiser_latent(config, config_ae, model, ae, num_samples, t_start=1000, reverse_steps=20, T=1000)
     for i, sample in enumerate(samples_ddim):
-        utils.plot_slice(sample, 0, 1, 63, f"generated_sample_diff_{i}")
+        utils.plot_slice(sample, 0, 1, 63, f"generated_latent_sample_diff_{i}")
 
     residual_of_generated(samples_fm, samples_gt, config)
     test_wasserstein(samples_fm, samples_gt, config)

@@ -12,7 +12,7 @@ from conflictfree.grad_operator import ConFIGOperator
 from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
 from my_config_length import UniProjectionLength
-from model_latent import LatentModel
+from model_simple import Model_base
 from model_ae import CVAE_3D_II
 from model_vqvae import VQVAE, VAE, AE
 
@@ -34,10 +34,10 @@ def fm_standard_step(model, xt, t, target, optimizer, config):
     return total_loss, loss
 
 # Define the training function
-def train_flow_matching(config):
+def train_flow_matching(config, config_ae):
     # Load the dataset
     print("Loading dataset...")
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size)
+    dataset = IsotropicTurbulenceDataset(dt=config_ae.Data.dt, grid_size=config_ae.Data.grid_size, crop=config_ae.Data.crop, seed=config_ae.Data.seed, size=config_ae.Data.size, batch_size=config.Training.batch_size)
     #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=config.Training.batch_size, grid_size=config.Data.grid_size)
 
     # Update the dataloaders
@@ -46,7 +46,7 @@ def train_flow_matching(config):
     test_loader = dataset.test_loader
 
     # Initialize the model
-    model = LatentModel(config)
+    model = Model_base(config)
     model = model.to(config.device)
 
     # Convert learning_rate and divergence_loss_weight to float if they are strings
@@ -75,10 +75,13 @@ def train_flow_matching(config):
     os.makedirs(run_dir, exist_ok=True)
 
     # Load the pre-trained autoencoder
-    #ae = CVAE_3D_II(image_channels=config.Model.in_channels, h_dim=config.Model.h_dim, z_dim=config.Model.z_dim, input_shape=(config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size))
-    ae = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
-                device=config.device).to(config.device)
-    ae.load_state_dict(torch.load(config.Model.ae_path, map_location=config.device))
+    #model = VQVAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+    #             num_embedding=config.Model.num_embedding, device=config.device).to(config.device)
+    #model = AE(input_size=config.Model.in_channels, image_size=config.Data.grid_size, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+    #            device=config.device, z_dim=config.Model.z_dim).to(config.device)
+    ae = VAE(input_size=config_ae.Model.in_channels, hidden_size=config_ae.Model.hidden_size, depth=config_ae.Model.depth, num_res_block=config_ae.Model.num_res_block, res_size=config_ae.Model.res_size, embedding_size=config_ae.Model.embedding_size,
+                device=config_ae.device).to(config.device)
+    ae.load_state_dict(torch.load(config_ae.Model.ae_path, map_location=config.device))
     ae.eval()
     for param in ae.parameters():
         param.requires_grad = False
@@ -93,7 +96,7 @@ def train_flow_matching(config):
         mse_loss = 0.0
 
         for batch_idx, x1 in enumerate(train_loader):
-            print(f"Batch {batch_idx+1}/{len(train_loader)}")
+            #print(f"Batch {batch_idx+1}/{len(train_loader)}")
             x1 = torch.tensor(x1) if isinstance(x1, np.ndarray) else x1
             x0 = torch.randn_like(x1)
             x1 = x1.to(config.device)
@@ -103,12 +106,18 @@ def train_flow_matching(config):
             with torch.no_grad():
                 #z1, _, _ = ae.encode(x1)
                 #z0, _, _ = ae.encode(x0)
-                z1 = ae.encode(x1)
-                z0 = ae.encode(x0)
+                #z1 = ae.encode(x1)
+                #z0 = ae.encode(x0)
+                mu1, logvar1 = ae.encode(x1)
+                mu0, logvar0 = ae.encode(x0)
+                z1 = ae.reparameterize(mu1, logvar1)
+                z0 = ae.reparameterize(mu0, logvar0)
+                
 
+            #print(z1.shape)
             target = z1 - (1 - config.Training.sigma_min) * z0
             t = torch.rand(z1.size(0), device=config.device)
-            zt = (1 - (1 - config.Training.sigma_min) * t[:, None]) * z0 + t[:, None] * z1
+            zt = (1 - (1 - config.Training.sigma_min) * t[:, None, None, None, None]) * z0 + t[:, None, None, None, None] * z1
 
             # Flow matching in latent space
             total_loss, loss = fm_standard_step(model, zt, t, target, optimizer, config)
@@ -129,11 +138,15 @@ def train_flow_matching(config):
                 x0 = x0.to(config.device)
                 #z1, _, _ = ae.encode(x1)
                 #z0, _, _ = ae.encode(x0)
-                z1 = ae.encode(x1)
-                z0 = ae.encode(x0)
+                #z1 = ae.encode(x1)
+                #z0 = ae.encode(x0)
+                mu1, logvar1 = ae.encode(x1)
+                mu0, logvar0 = ae.encode(x0)
+                z1 = ae.reparameterize(mu1, logvar1)
+                z0 = ae.reparameterize(mu0, logvar0)
                 target = z1 - (1 - config.Training.sigma_min) * z0
                 t = torch.rand(z1.size(0), device=config.device)
-                zt = (1 - (1 - config.Training.sigma_min) * t[:, None]) * z0 + t[:, None] * z1
+                zt = (1 - (1 - config.Training.sigma_min) * t[:, None, None, None, None]) * z0 + t[:, None, None, None, None] * z1
                 pred = model(zt, t)
                 val_loss += ((target - pred) ** 2).mean().item()
                 
@@ -179,10 +192,15 @@ def train_flow_matching(config):
 if __name__ == "__main__":
     # Load the configuration
     print("Loading config...")
-    with open("configs/config_vqvae.yml", "r") as f:
+    with open("configs/config_lfm.yml", "r") as f:
         config = yaml.safe_load(f)
     config = utils.dict2namespace(config)
     print(config.device)
+    
+    print("Loading config...")
+    with open("configs/config_vqvae.yml", "r") as f:
+        config_ae = yaml.safe_load(f)
+    config_ae = utils.dict2namespace(config_ae)
 
     # Train the model
-    train_flow_matching(config)
+    train_flow_matching(config, config_ae)

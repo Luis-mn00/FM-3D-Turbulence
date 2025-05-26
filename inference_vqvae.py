@@ -20,10 +20,10 @@ os.makedirs(plot_folder, exist_ok=True)
 def load_model(config, model_path):
     #model = VQVAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
     #             num_embedding=config.Model.num_embedding, device=config.device).to(config.device)
+    #model = AE(input_size=config.Model.in_channels, image_size=config.Data.grid_size, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
+    #            device=config.device, z_dim=config.Model.z_dim).to(config.device)
     model = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
                 device=config.device).to(config.device)
-    #model = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
-    #            device=config.device).to(config.device)
     model.load_state_dict(torch.load(model_path, map_location=config.device))
     model = model.to(config.device)
     model.eval()

@@ -146,6 +146,129 @@ class Decoder(nn.Module):
 
     def forward(self, input):
         return self.blocks(input)
+    
+class Encoder_fl(nn.Module):
+    def __init__(self, input_size, hidden_size, output_channels, num_res_block, res_size, stride, latent_dim):
+        super().__init__()
+        self.stride = stride
+        if stride == 8:
+            blocks = [
+                nn.Conv3d(input_size, hidden_size // 2, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(hidden_size // 2, hidden_size // 2, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(hidden_size // 2, hidden_size, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
+            ]
+        elif stride == 4:
+            blocks = [
+                nn.Conv3d(input_size, hidden_size // 2, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(hidden_size // 2, hidden_size, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(hidden_size, hidden_size, 3, 1, 1),
+            ]
+        elif stride == 2:
+            blocks = [
+                nn.Conv3d(input_size, hidden_size // 2, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(hidden_size // 2, hidden_size, 3, 1, 1),
+            ]
+        else:
+            raise ValueError('Not valid stride')
+
+        for _ in range(num_res_block):
+            blocks.append(ResBlock(hidden_size, res_size))
+
+        blocks.extend([
+            nn.BatchNorm3d(hidden_size),
+            nn.ReLU(inplace=True),
+            nn.Conv3d(hidden_size, output_channels, 1, 1, 0),
+        ])
+        self.blocks = nn.Sequential(*blocks)
+
+        self.output_channels = output_channels
+        self.latent_dim = latent_dim
+        self.latent_shape = None  # to be defined in first forward pass
+        self.mlp = None  # lazy init after knowing flattened size
+
+    def forward(self, x):
+        out = self.blocks(x)  # shape: [B, C, D, H, W]
+        B, C, D, H, W = out.shape
+        self.latent_shape = (C, D, H, W)
+        out_flat = out.view(B, -1)  # [B, C*D*H*W]
+
+        # Lazy init of MLP
+        if self.mlp is None:
+            self.mlp = nn.Sequential(
+                nn.Linear(C * D * H * W, self.latent_dim),
+                nn.ReLU(),
+                nn.Linear(self.latent_dim, self.latent_dim)
+            )
+            self.mlp.to(x.device)
+
+        return self.mlp(out_flat)  # [B, latent_dim]
+
+
+class Decoder_fl(nn.Module):
+    def __init__(self, latent_dim, output_size, hidden_size, num_res_block, res_size, stride, latent_shape):
+        super().__init__()
+        self.latent_shape = latent_shape  # (C, D, H, W)
+        self.latent_dim = latent_dim
+        flat_dim = latent_shape[0] * latent_shape[1] * latent_shape[2] * latent_shape[3]
+
+        self.mlp = nn.Sequential(
+            nn.Linear(latent_dim, latent_dim),
+            nn.ReLU(),
+            nn.Linear(latent_dim, flat_dim),
+            nn.ReLU()
+        )
+
+        blocks = [nn.Conv3d(latent_shape[0], hidden_size, 3, 1, 1)]
+        for _ in range(num_res_block):
+            blocks.append(ResBlock(hidden_size, res_size))
+
+        blocks.extend([
+            nn.BatchNorm3d(hidden_size),
+            nn.ReLU(inplace=True),
+        ])
+
+        if stride == 8:
+            blocks.extend([
+                nn.ConvTranspose3d(hidden_size, hidden_size // 2, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose3d(hidden_size // 2, hidden_size // 2, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose3d(hidden_size // 2, output_size, 4, 2, 1),
+            ])
+        elif stride == 4:
+            blocks.extend([
+                nn.ConvTranspose3d(hidden_size, hidden_size // 2, 4, 2, 1),
+                nn.BatchNorm3d(hidden_size // 2),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose3d(hidden_size // 2, output_size, 4, 2, 1),
+            ])
+        elif stride == 2:
+            blocks.extend([
+                nn.ConvTranspose3d(hidden_size, output_size, 4, 2, 1),
+            ])
+        self.blocks = nn.Sequential(*blocks)
+
+    def forward(self, z):
+        x = self.mlp(z)  # [B, flat_dim]
+        x = x.view(z.size(0), *self.latent_shape)  # [B, C, D, H, W]
+        return self.blocks(x)
+
+
 
 
 class VQVAE(nn.Module):
@@ -194,124 +317,21 @@ class VQVAE(nn.Module):
                 raise ValueError('Not valid d_mode')
         return output
 
-class VAE(nn.Module):
-    def __init__(self, input_size=3, hidden_size=128, depth=2, num_res_block=2, res_size=32,
-                embedding_size=64, d_mode=['exact', 'physics'], d_commit=[0.1, 0.0001],
-                loss_power_vg=2, device='cpu'):
-        super().__init__()
-        self.encoder = Encoder(input_size, hidden_size, embedding_size * 2, num_res_block, res_size, stride=2 ** depth)
-        self.decoder = Decoder(embedding_size, input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
-        self.embedding_size = embedding_size
-        self.d_mode = d_mode
-        self.d_commit = d_commit
-        self.loss_power = loss_power_vg
-        self.device = device
-
-    def encode(self, x):
-        encoded = self.encoder(x)
-        # Split last channel into mean and logvar
-        mu, logvar = torch.chunk(encoded, 2, dim=1)
-        return mu, logvar
-
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
-
-    def decode(self, z):
-        return self.decoder(z)
-
-    def forward(self, input, Epoch=None):
-        output = {'loss': torch.tensor(0, device=self.device, dtype=torch.float32)}
-        x = input['uvw']
-        mu, logvar = self.encode(x)
-        z = self.reparameterize(mu, logvar)
-        decoded = self.decode(z)
-        output['uvw'] = decoded
-        output['duvw'] = utils.spectral_derivative_3d(output['uvw'])
-
-        # Reconstruction loss
-        recon_loss = F.mse_loss(output['uvw'], input['uvw'])
-
-        # KL divergence loss
-        kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) / x.numel()
-
-        output['loss'] = recon_loss + kl_loss
-
-        for i in range(len(self.d_mode)):
-            if self.d_mode[i] == 'exact':
-                output['loss'] += self.d_commit[i] * utils.weighted_mse_loss(output['duvw'], input['duvw'])
-            elif self.d_mode[i] == 'physics':
-                if Epoch and (Epoch > 25):
-                    output['loss'] += self.d_commit[i] * utils.physics(output['duvw'], input['duvw'])
-            else:
-                raise ValueError('Not valid d_mode')
-
-        return output
-    
-class VAE(nn.Module):
-    def __init__(self, input_size=3, hidden_size=128, depth=2, num_res_block=2, res_size=32,
-                embedding_size=64, d_mode=['exact', 'physics'], d_commit=[0.1, 0.0001],
-                loss_power_vg=2, device='cpu'):
-        super().__init__()
-        self.encoder = Encoder(input_size, hidden_size, embedding_size * 2, num_res_block, res_size, stride=2 ** depth)
-        self.decoder = Decoder(embedding_size, input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
-        self.embedding_size = embedding_size
-        self.d_mode = d_mode
-        self.d_commit = d_commit
-        self.loss_power = loss_power_vg
-        self.device = device
-
-    def encode(self, x):
-        encoded = self.encoder(x)
-        # Split last channel into mean and logvar
-        mu, logvar = torch.chunk(encoded, 2, dim=1)
-        return mu, logvar
-
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
-
-    def decode(self, z):
-        return self.decoder(z)
-
-    def forward(self, input, Epoch=None):
-        output = {'loss': torch.tensor(0, device=self.device, dtype=torch.float32)}
-        x = input['uvw']
-        mu, logvar = self.encode(x)
-        z = self.reparameterize(mu, logvar)
-        decoded = self.decode(z)
-        output['uvw'] = decoded
-        output['duvw'] = utils.spectral_derivative_3d(output['uvw'])
-
-        # Reconstruction loss
-        recon_loss = F.mse_loss(output['uvw'], input['uvw'])
-
-        # KL divergence loss
-        kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) / x.numel()
-
-        output['loss'] = recon_loss + kl_loss
-
-        for i in range(len(self.d_mode)):
-            if self.d_mode[i] == 'exact':
-                output['loss'] += self.d_commit[i] * utils.weighted_mse_loss(output['duvw'], input['duvw'])
-            elif self.d_mode[i] == 'physics':
-                if Epoch and (Epoch > 25):
-                    output['loss'] += self.d_commit[i] * utils.physics(output['duvw'], input['duvw'])
-            else:
-                raise ValueError('Not valid d_mode')
-
-        return output
-    
 class AE(nn.Module):
-    def __init__(self, input_size=3, hidden_size=128, depth=2, num_res_block=2, res_size=32,
-                embedding_size=64, d_mode=['exact', 'physics'], d_commit=[0.1, 0.0001],
+    def __init__(self, input_size=3, image_size=128, hidden_size=128, depth=2, num_res_block=2, res_size=32,
+                embedding_size=64, z_dim=512, d_mode=['exact', 'physics'], d_commit=[0.1, 0.0001],
                 loss_power_vg=2, device='cpu'):
         super().__init__()
-        self.encoder = Encoder(input_size, hidden_size, embedding_size * 2, num_res_block, res_size, stride=2 ** depth)
-        self.decoder = Decoder(embedding_size, input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
-        self.embedding_size = embedding_size
+        self.encoder = Encoder(input_size, hidden_size, embedding_size*2, num_res_block, res_size, stride=2 ** depth)
+        #self.encoder = Encoder_fl(input_size, hidden_size, embedding_size, num_res_block, res_size, stride=2 ** depth, latent_dim=z_dim)
+        
+        #dummy_input = torch.randn(1, input_size, image_size, image_size, image_size)  # Example input
+        #z_flat = self.encoder(dummy_input)  # [4, 256*16*16*16]
+        #latent_shape = self.encoder.latent_shape  # Save shape for decoder
+            
+        self.decoder = Decoder(z_dim, input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
+        #self.decoder = Decoder_fl(z_dim, input_size, hidden_size, num_res_block, res_size, stride=2 ** depth, latent_shape=latent_shape)
+        self.embedding_size = z_dim
         self.d_mode = d_mode
         self.d_commit = d_commit
         self.loss_power = loss_power_vg
@@ -336,6 +356,61 @@ class AE(nn.Module):
         recon_loss = F.mse_loss(output['uvw'], input['uvw'])
 
         output['loss'] = recon_loss
+
+        for i in range(len(self.d_mode)):
+            if self.d_mode[i] == 'exact':
+                output['loss'] += self.d_commit[i] * utils.weighted_mse_loss(output['duvw'], input['duvw'])
+            elif self.d_mode[i] == 'physics':
+                if Epoch and (Epoch > 25):
+                    output['loss'] += self.d_commit[i] * utils.physics(output['duvw'], input['duvw'])
+            else:
+                raise ValueError('Not valid d_mode')
+
+        return output
+    
+class VAE(nn.Module):
+    def __init__(self, input_size=3, hidden_size=128, depth=2, num_res_block=2, res_size=32,
+                embedding_size=64, d_mode=['exact', 'physics'], d_commit=[0.1, 0.0001],
+                loss_power_vg=2, device='cpu'):
+        super().__init__()
+        self.encoder = Encoder(input_size, hidden_size, embedding_size * 2, num_res_block, res_size, stride=2 ** depth)
+        self.decoder = Decoder(embedding_size, input_size, hidden_size, num_res_block, res_size, stride=2 ** depth)
+        self.embedding_size = embedding_size
+        self.d_mode = d_mode
+        self.d_commit = d_commit
+        self.loss_power = loss_power_vg
+        self.device = device
+
+    def encode(self, x):
+        encoded = self.encoder(x)
+        # Split last channel into mean and logvar
+        mu, logvar = torch.chunk(encoded, 2, dim=1)
+        return mu, logvar
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def decode(self, z):
+        return self.decoder(z)
+
+    def forward(self, input, Epoch=None):
+        output = {'loss': torch.tensor(0, device=self.device, dtype=torch.float32)}
+        x = input['uvw']
+        mu, logvar = self.encode(x)
+        z = self.reparameterize(mu, logvar)
+        decoded = self.decode(z)
+        output['uvw'] = decoded
+        output['duvw'] = utils.spectral_derivative_3d(output['uvw'])
+
+        # Reconstruction loss
+        recon_loss = F.mse_loss(output['uvw'], input['uvw'])
+
+        # KL divergence loss
+        kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) / x.numel()
+
+        output['loss'] = recon_loss + kl_loss
 
         for i in range(len(self.d_mode)):
             if self.d_mode[i] == 'exact':
