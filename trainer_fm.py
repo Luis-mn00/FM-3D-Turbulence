@@ -12,6 +12,7 @@ from conflictfree.grad_operator import ConFIGOperator
 from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
 from model_simple import Model_base
+from src.core.models.box.pdedit import PDEDiT3D_S
 from my_config_length import UniProjectionLength
 
 wandb.login(key="f4a726b2fe7929990149e82fb88da423cfa74e46")
@@ -21,6 +22,7 @@ wandb.init(project="fm")
 def fm_standard_step(model, xt, t, target, optimizer, config):
     # Forward pass
     pred = model(xt, t)
+    pred = pred.sample
     loss = ((target - pred) ** 2).mean()
     total_loss = loss
     
@@ -40,7 +42,8 @@ def fm_PINN_step(model, xt, t, target, optimizer, config):
 
     # Compute the divergence-free loss
     divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :])
-    divergence_loss = torch.mean(divergence ** 2)
+    #divergence_loss = torch.mean(divergence ** 2)
+    divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
 
     # Combine the flow matching loss and the divergence-free loss
     total_loss = loss + config.Training.divergence_loss_weight * divergence_loss
@@ -104,8 +107,8 @@ def fm_ConFIG_step(model, xt, t, target, optimizer, config, operator):
 def train_flow_matching(config):
     # Load the dataset
     print("Loading dataset...")
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, field=None)
-    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=config.Data.size, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=config.Training.batch_size, num_samples=10)
+    #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, field=None)
+    dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=config.Data.size, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=config.Training.batch_size, num_samples=10, grid_size=config.Data.grid_size)
 
     # Update the dataloaders
     train_loader = dataset.train_loader
@@ -113,7 +116,13 @@ def train_flow_matching(config):
     test_loader = dataset.test_loader
 
     # Initialize the model
-    model = Model_base(config)
+    model = PDEDiT3D_S(
+        channel_size=config.Model.channel_size,
+        channel_size_out=config.Model.channel_size_out,
+        drop_class_labels=config.Model.drop_class_labels,
+        partition_size=config.Model.partition_size,
+        mending=False
+    )
     model = model.to(config.device)
 
     # Convert learning_rate and divergence_loss_weight to float if they are strings
@@ -152,7 +161,7 @@ def train_flow_matching(config):
 
         # Get the next batch from the train_loader
         for batch_idx, x1 in enumerate(train_loader):
-            #print(f"Batch {batch_idx+1}/{len(train_loader)}")
+            print(f"Batch {batch_idx+1}/{len(train_loader)}")
             
             # Ensure all elements in the batch are tensors
             x1 = torch.tensor(x1) if isinstance(x1, np.ndarray) else x1
@@ -168,6 +177,8 @@ def train_flow_matching(config):
 
             # Interpolate between x0 and x1
             xt = (1 - (1 - config.Training.sigma_min) * t[:, None, None, None, None]) * x0 + t[:, None, None, None, None] * x1
+            xt = xt.float()
+            print(xt.shape)
             
             # Perform the training step
             if config.Training.method == "std":
@@ -211,6 +222,7 @@ def train_flow_matching(config):
                 xt = (1 - t[:, None, None, None, None]) * x0 + t[:, None, None, None, None] * x1
 
                 pred = model(xt, t)
+                pred = pred.sample
                 val_loss += ((target - pred) ** 2).mean().item()
 
         val_loss /= len(val_loader)

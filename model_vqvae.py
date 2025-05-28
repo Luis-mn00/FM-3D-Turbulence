@@ -322,7 +322,7 @@ class AE(nn.Module):
                 embedding_size=64, z_dim=512, d_mode=['exact', 'physics'], d_commit=[0.1, 0.0001],
                 loss_power_vg=2, device='cpu'):
         super().__init__()
-        self.encoder = Encoder(input_size, hidden_size, embedding_size*2, num_res_block, res_size, stride=2 ** depth)
+        self.encoder = Encoder(input_size, hidden_size, embedding_size, num_res_block, res_size, stride=2 ** depth)
         #self.encoder = Encoder_fl(input_size, hidden_size, embedding_size, num_res_block, res_size, stride=2 ** depth, latent_dim=z_dim)
         
         #dummy_input = torch.randn(1, input_size, image_size, image_size, image_size)  # Example input

@@ -105,7 +105,8 @@ class IsotropicTurbulenceDataset:
         val_indices = indices[train_size:train_size + val_size]
         test_indices = indices[train_size + val_size:]
         
-        self.data = torch.cat((self.velocity, self.pressure), dim=1)
+        #self.data = torch.cat((self.velocity, self.pressure), dim=1)
+        self.data = self.velocity
         
         train_dataset = torch.utils.data.Subset(self.data, train_indices)
         val_dataset = torch.utils.data.Subset(self.data, val_indices)
@@ -120,7 +121,7 @@ class IsotropicTurbulenceDataset:
     def __len__(self):
         return self.size
 
-"""
+
 class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=32, num_samples=10, test=False, grid_size=128):
         self.file_path = file_path
@@ -171,19 +172,26 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
                 return len(self.indices)
             def spectral_resize_3d(self, img, target_size):
                 # img: (D, H, W), target_size: int
+                original_shape = np.array(img.shape)
+                scale_factor = np.prod(original_shape) / (target_size ** 3)  # normalize energy
+
                 F = fftn(img)
                 F_shifted = fftshift(F)
-                center = np.array(F_shifted.shape) // 2
+                center = original_shape // 2
                 half_size = target_size // 2
-                # Crop in frequency domain
+
+                # Crop the central part of the spectrum
                 cropped = F_shifted[
-                    center[0]-half_size:center[0]+half_size,
-                    center[1]-half_size:center[1]+half_size,
-                    center[2]-half_size:center[2]+half_size
+                    center[0] - half_size:center[0] + half_size,
+                    center[1] - half_size:center[1] + half_size,
+                    center[2] - half_size:center[2] + half_size
                 ]
+
                 cropped_unshifted = ifftshift(cropped)
                 resized = ifftn(cropped_unshifted)
-                return np.real(resized)
+                resized = np.real(resized) / scale_factor  # apply normalization
+
+                return resized
             def __getitem__(self, idx):
                 with h5py.File(self.file_path, 'r') as f:
                     sample = f['sims'][self.sim_group][self.indices[idx]][:]
@@ -191,7 +199,12 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
                     sample = np.transpose(sample, (3, 0, 1, 2))
                     if self.norm:
                         sample = (sample - self.fields_mean) / self.fields_std
+                        
+                    sample = sample[:3, :, :, :]
                     # Spectral downsampling for each channel
+                    sample_plot = torch.from_numpy(sample)
+                    sample_plot = sample_plot.unsqueeze(0)
+                    #utils.plot_slice(sample_plot, 0, 0, int(512/2), name="original_sample_before")
                     c, d, h, w = sample.shape
                     gs = self.grid_size
                     sample_ds = np.zeros((c, gs, gs, gs), dtype=np.float32)
@@ -263,6 +276,8 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
             self.fields_std = f['norm_fields_sca_std'][:]
         if self.size is not None:
             self.indices = self.indices[:self.size]
+            
+        self.data_scaler = utils.StdScaler(self.fields_mean, self.fields_std)
 
         # Split indices for train/val/test
         N = len(self.indices)
@@ -332,3 +347,4 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
                     test_dataset.append(sample)
                 self.test_dataset = torch.tensor(np.stack(test_dataset, axis=0), dtype=torch.float16)
                 self.test_dataset = self.test_dataset[:self.num_samples]
+"""

@@ -102,7 +102,7 @@ def plot_2d_comparison(low_res, high_res, gt, filename):
     plt.close()
     print(f"Plot saved in {filename}")
 
-def compute_divergence(velocity):
+def compute_divergence(velocity, h):
     assert velocity.shape[1] == 3, "Velocity must have 3 channels (vx, vy, vz)"
     # Pad for central differences (replicate boundary)
     def central_diff(f, dim):
@@ -116,7 +116,7 @@ def compute_divergence(velocity):
         slices_after = [slice(None)] * 4
         slices_before[dim+1] = slice(0, -2)
         slices_after[dim+1] = slice(2, None)
-        return (f_pad[tuple(slices_after)] - f_pad[tuple(slices_before)]) / 2.0
+        return (f_pad[tuple(slices_after)] - f_pad[tuple(slices_before)]) / (2 * h)
 
     vx = velocity[:, 0]
     vy = velocity[:, 1]

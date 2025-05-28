@@ -4,10 +4,12 @@ import os
 import yaml
 import numpy as np
 from scipy.stats import wasserstein_distance_nd
+import math
 
 from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
 import utils
 from model_simple import Model_base
+from src.core.models.box.pdedit import PDEDiT3D_S
 
 # Create a folder to save plots
 plot_folder = "generated_plots"
@@ -29,12 +31,13 @@ def integrate_ode_and_sample(config, model, num_samples=1, steps=10):
     for _ in range(num_samples):
         print(f"Generating sample {_+1}/{num_samples}")
         # Initialize random sample
-        xt = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device)
+        xt = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device)
 
         for i, t in enumerate(torch.linspace(0, 1, steps, device=config.device), start=1):
             #print(f"Step {i}/{steps}")
             # Predict the flow
             pred = model(xt, t.expand(xt.size(0)))
+            pred = pred.sample
 
             # Update xt using the ODE integration step
             xt = xt + (1 / steps) * pred
@@ -75,6 +78,7 @@ def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
         
         # Predict velocity v_theta(x_t, t) using the model
         v = model(x, t)
+        v = v.sample
 
         # Convert velocity to noise epsilon
         e = velocity_to_epsilon(v, x, t, alpha_bar_t)
@@ -98,7 +102,7 @@ def generate_samples_with_denoiser(config, model, num_samples, t_start, reverse_
     for _ in range(num_samples):
         print(f"Generating sample {_+1}/{num_samples}")
         # Ensure the input tensor is in float format to match the model's parameters
-        x = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
+        x = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
         
         # Perform denoising using DDIM
         sample = ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod)
@@ -111,14 +115,14 @@ def residual_of_generated(samples, samples_gt, config):
     for i in range(len(samples)):
         # Ensure all tensors are on the same device
         sample = samples[i].to(config.device)
-        res, = utils.compute_divergence(sample[:, :3, :, :, :])
+        res, = utils.compute_divergence(sample[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
         rmse_loss[i] = torch.sqrt(torch.mean(res**2))
     
     test_residuals = []
     for i in range(len(samples)):
         sample_gt = samples_gt[i].to(config.device)
         sample_gt = sample_gt.unsqueeze(0)
-        res_gt, = utils.compute_divergence(sample_gt[:, :3, :, :, :])
+        res_gt, = utils.compute_divergence(sample_gt[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
         test_residuals.append(torch.sqrt(torch.mean(res_gt**2)))
         
     print(f"L2 residual: {np.mean(rmse_loss):.4f} +/- {np.std(rmse_loss):.4f}") 
@@ -159,7 +163,16 @@ if __name__ == "__main__":
 
     # Load the trained model
     print("Loading model...")
-    model = load_model(config, config.Model.save_path)
+    model = PDEDiT3D_S(
+        channel_size=config.Model.channel_size,
+        channel_size_out=config.Model.channel_size_out,
+        drop_class_labels=config.Model.drop_class_labels,
+        partition_size=config.Model.partition_size,
+        mending=False
+    )
+    model.load_state_dict(torch.load(config.Model.save_path, map_location=config.device))
+    model = model.to(config.device)
+    model.eval()
 
     # Generate samples using ODE integration
     num_samples = 10

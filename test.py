@@ -5,9 +5,11 @@ import torch
 import numpy as np
 import os
 from pbdl.loader import Dataloader
+import math
 
 from torchfsm.operator import Div
 from torchfsm.mesh import MeshGrid
+from src.core.models.box.pdedit import PDEDiT3D_S
 
 """
 dataset = IsotropicTurbulenceDataset(grid_size=64)
@@ -47,28 +49,90 @@ with h5py.File(file_path, 'r') as f:
     dataset = torch.tensor(dataset, dtype=torch.float32)
     dataset = dataset.permute(0, 4, 1, 2, 3)
     print(dataset.shape)
+    
+dataset = Dataloader("isotropic1024coarse", local_datasets_dir="/mnt/data4/pbdl-datasets-local/3d_jhtdb/", time_steps=None)
+
+file_path = "/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5"
+with h5py.File(file_path, 'r') as f:
+    keys = list(f.keys())
+    print(keys)
+    
+    fields_max = f['norm_fields_sca_max'][:]
+    fields_min = f['norm_fields_sca_min'][:]
+    fields_mean = f['norm_fields_sca_mean'][:]
+    fields_std = f['norm_fields_sca_std'][:]
+
+    print(fields_max)
+    print(fields_min)
+    print(fields_mean)
+    print(fields_std)
+    
+    keys = list(f['sims']['sim0']['0'].keys())
+    print(keys)
+    
 """
 
-
-data = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=500, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=1)
+data = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=500, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=1, grid_size=128)
 train_loader = data.train_loader
 sample = next(iter(train_loader))
-#print(sample.shape)
-#dataset = Dataloader("isotropic1024coarse", local_datasets_dir="/mnt/data4/pbdl-datasets-local/3d_jhtdb/")
+sample = data.data_scaler.inverse(sample)
+print(sample.shape)
+utils.plot_slice(sample, 0, 0, int(128/2), name="original_sample_after")
 
 mesh_grid=MeshGrid([(0, 2*torch.pi, 128),(0, 2*torch.pi, 128), (0, 2*torch.pi, 128)])
 x,y,z=mesh_grid.bc_mesh_grid()
 u = sample[:, :3, :, :, :]
-utils.plot_slice(u, 0, 0, 63, name="spectral_interp")
+#utils.plot_slice(u, 0, 0, 63, name="spectral_interp")
 
-print(u.shape)
 div=Div()
 div_u=div(u,mesh=mesh_grid)
 print(div_u.shape)
 
-div_u[div_u.abs() > 1000] = 0
-utils.plot_slice(div_u, 0, 0, 63, name="residual_fsm")
+div_u[div_u > 2] = 2
+div_u[div_u < -2] = -2
+utils.plot_slice(div_u, 0, 0, int(128/2), name="residual_fsm")
+print(torch.mean(div_u))
 
-div_fdm = utils.compute_divergence(u)
+div_fdm = utils.compute_divergence(u, h=2*math.pi/128)
 div_fdm = div_fdm.unsqueeze(0)
-utils.plot_slice(div_fdm, 0, 0, 63, name="residual_fdm")
+utils.plot_slice(div_fdm, 0, 0, int(128/2), name="residual_fdm")
+print(torch.mean(div_fdm))
+
+"""
+# Define input parameters
+channel_size = 3  # Number of input channels
+channel_size_out = 3  # Number of output channels
+partition_size = (2, 2, 2)  # Partition size for region partitioning
+drop_class_labels = True  # Whether to drop class labels
+mending = False  # Whether to enable mending
+
+# Instantiate the model
+model = PDEDiT3D_S(
+    channel_size=channel_size,
+    channel_size_out=channel_size_out,
+    drop_class_labels=drop_class_labels,
+    partition_size=partition_size,
+    mending=mending
+)
+
+data = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=500, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=1, grid_size=128)
+train_loader = data.train_loader
+sample = next(iter(train_loader))
+hidden_states = sample[:, :3, :, :, :].float()
+batch_size = 1
+timestep = torch.randint(0, 1000, (batch_size,))
+
+
+# Move tensors to the same device as the model
+#device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+device = 'cpu'
+print(device)
+model = model.to(device)
+hidden_states = hidden_states.to(device)
+timestep = timestep.to(device)
+
+print(hidden_states.shape)
+print(timestep)
+output = model(hidden_states, timestep)
+print(output.sample.shape)
+"""
