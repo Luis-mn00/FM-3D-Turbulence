@@ -1,4 +1,4 @@
-from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset, BigSpectralIsotropicTurbulenceDataset
 import utils
 import h5py
 import torch
@@ -77,9 +77,9 @@ train_loader = data.train_loader
 sample = next(iter(train_loader))
 sample = data.data_scaler.inverse(sample)
 print(sample.shape)
-utils.plot_slice(sample, 0, 0, int(128/2), name="original_sample_after")
+utils.plot_slice(sample, 0, 0, int(512/2), name="original_sample_after")
 
-mesh_grid=MeshGrid([(0, 2*torch.pi, 128),(0, 2*torch.pi, 128), (0, 2*torch.pi, 128)])
+mesh_grid=MeshGrid([(0, 2*torch.pi, 512),(0, 2*torch.pi, 512), (0, 2*torch.pi, 512)])
 x,y,z=mesh_grid.bc_mesh_grid()
 u = sample[:, :3, :, :, :]
 #utils.plot_slice(u, 0, 0, 63, name="spectral_interp")
@@ -88,15 +88,15 @@ div=Div()
 div_u=div(u,mesh=mesh_grid)
 print(div_u.shape)
 
-div_u[div_u > 2] = 2
-div_u[div_u < -2] = -2
-utils.plot_slice(div_u, 0, 0, int(128/2), name="residual_fsm")
-print(torch.mean(div_u))
+#div_u[div_u > 2] = 2
+#div_u[div_u < -2] = -2
+utils.plot_slice(div_u, 0, 0, int(512/2), name="residual_fsm")
+print(torch.sqrt(torch.sum(div_u ** 2)))
 
-div_fdm = utils.compute_divergence(u, h=2*math.pi/128)
+div_fdm = utils.compute_divergence(u, h=2*math.pi/512)
 div_fdm = div_fdm.unsqueeze(0)
-utils.plot_slice(div_fdm, 0, 0, int(128/2), name="residual_fdm")
-print(torch.mean(div_fdm))
+utils.plot_slice(div_fdm, 0, 0, int(512/2), name="residual_fdm")
+print(torch.sqrt(torch.sum(div_fdm ** 2)))
 
 """
 # Define input parameters
@@ -135,4 +135,21 @@ print(hidden_states.shape)
 print(timestep)
 output = model(hidden_states, timestep)
 print(output.sample.shape)
+
+dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=128,
+                                                    norm=True,
+                                                    size=200,
+                                                    train_ratio=0.8,
+                                                    val_ratio=0.1,
+                                                    test_ratio=0.1,
+                                                    batch_size=5,
+                                                    num_samples=10)
+
+raw_data = dataset.data
+print(raw_data.shape)
+
+A = raw_data[0].unsqueeze(0)
+B = raw_data[1].unsqueeze(0)
+dist = utils.LSiM_distance_3D(A, B)
+print(dist)
 """

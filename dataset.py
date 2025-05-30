@@ -120,8 +120,72 @@ class IsotropicTurbulenceDataset:
     
     def __len__(self):
         return self.size
+    
+class BigSpectralIsotropicTurbulenceDataset:
+    def __init__(self, grid_size=128, norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=32, num_samples=10):
+        self.grid_size = grid_size
+        self.norm = norm
+        self.size = size
+        self.train_ratio = train_ratio
+        self.val_ratio = val_ratio
+        self.test_ratio = test_ratio
+        self.batch_size = batch_size
+        self.num_samples = num_samples
+        
+        self.data = torch.load(f'data/data_spectral_{grid_size}.pt', weights_only=False)
+        if isinstance(self.data, np.ndarray):
+            self.data = torch.from_numpy(self.data)
+        self.N_time, self.N_channels, self.Nx, self.Ny, self.Nz = self.data.shape
+        print(f"N_time: {self.N_time}, N_channels: {self.N_channels}, Nx: {self.Nx}, Ny: {self.Ny}, Nz: {self.Nz}")
 
+        self.velocity = self.data[:, :3, :, :, :]
+        self.pressure = self.data[:, 3, :, :, :].unsqueeze(1)
+        
+        mean_data, std_data = utils.compute_statistics(self.data)
+        self.data_scaler = utils.StdScaler(mean_data, std_data)
+        
+        mean_velocity, std_velocity = utils.compute_statistics(self.velocity)
+        self.velocity_scaler = utils.StdScaler(mean_velocity, std_velocity)
+        
+        mean_pressure, std_pressure = utils.compute_statistics(self.pressure)
+        self.pressure_scaler = utils.StdScaler(mean_pressure, std_pressure)
+        
+        if self.norm:
+            self.data = self.data_scaler(self.data)
+            self.velocity = self.velocity_scaler(self.velocity)
+            self.pressure = self.pressure_scaler(self.pressure)
+                
+        if self.size is not None:
+            self.N_time = self.size
+            self.data = self.data[:self.size]
+            self.velocity = self.velocity[:self.size]
+            self.pressure = self.pressure[:self.size]
+            
+        indices = torch.randperm(self.size, generator=torch.Generator().manual_seed(1234))
+                
+        train_size = int(self.train_ratio * self.N_time)
+        val_size = int(self.val_ratio * self.N_time)
+        test_size = self.N_time - train_size - val_size
+        train_indices = indices[:train_size]
+        val_indices = indices[train_size:train_size + val_size]
+        test_indices = indices[train_size + val_size:]
+        
+        #self.data = torch.cat((self.velocity, self.pressure), dim=1)
+        self.data = self.velocity
+        
+        train_dataset = torch.utils.data.Subset(self.data, train_indices)
+        val_dataset = torch.utils.data.Subset(self.data, val_indices)
+        test_dataset = torch.utils.data.Subset(self.data, test_indices)
+        self.train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=False)
+        self.val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
+        self.test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False)
+        
+        self.test_dataset = test_dataset[:self.num_samples]
+    
+    def __len__(self):
+        return self.size
 
+"""
 class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
     def __init__(self, file_path, sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=32, num_samples=10, test=False, grid_size=128):
         self.file_path = file_path
@@ -147,7 +211,7 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
         if self.size is not None:
             self.indices = self.indices[:self.size]
               
-        self.data_scaler = utils.StdScaler(self.fields_mean, self.fields_std)
+        self.data_scaler = utils.StdScaler(self.fields_mean[:3], self.fields_std[:3])
 
         # Split indices for train/val/test
         N = len(self.indices)
@@ -310,13 +374,13 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
                         sample = (sample - self.fields_mean) / self.fields_std
                         #sample = (sample - self.fields_mean[:3, :, :, :]) / self.fields_std[:3, :, :, :]
                     # Crop a centered window of size grid_size x grid_size x grid_size
-                    c, d, h, w = sample.shape
-                    gs = self.grid_size
-                    start_d = (d - gs) // 2
-                    start_h = (h - gs) // 2
-                    start_w = (w - gs) // 2
-                    sample = sample[:, start_d:start_d+gs, start_h:start_h+gs, start_w:start_w+gs]
-                    sample = torch.tensor(sample, dtype=torch.float32)
+                    #c, d, h, w = sample.shape
+                    #gs = self.grid_size
+                    #start_d = (d - gs) // 2
+                    #start_h = (h - gs) // 2
+                    #start_w = (w - gs) // 2
+                    #sample = sample[:, start_d:start_d+gs, start_h:start_h+gs, start_w:start_w+gs]
+                    #sample = torch.tensor(sample, dtype=torch.float32)
                 return sample
 
         # General dataloaders
@@ -347,4 +411,3 @@ class BigIsotropicTurbulenceDataset(torch.utils.data.Dataset):
                     test_dataset.append(sample)
                 self.test_dataset = torch.tensor(np.stack(test_dataset, axis=0), dtype=torch.float16)
                 self.test_dataset = self.test_dataset[:self.num_samples]
-"""

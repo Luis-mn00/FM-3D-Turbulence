@@ -6,25 +6,27 @@ Data:
   field: "vorticity"
   norm: true
   shuffle: true
-  size: 100
+  size: 500
 
 Model:
   channel_size: 3  # Number of input channels
   channel_size_out: 3  # Number of output channels
-  partition_size: [2, 2, 2]  # Partition size for region partitioning
+  partition_size: [1, 1, 1]  # Partition size for region partitioning
   drop_class_labels: True  # Whether to drop class labels
   #save_path: "runs/013/epoch_240_0.2047_0.1725.pth"
   #save_path: "runs/077/epoch_60_0.2951_0.2749.pth"
-  save_path: "runs/079/epoch_210_0.3281_0.3193.pth"
+  #save_path: "runs/089/epoch_60_0.4262_0.3600.pth"
+  #save_path: "runs/092/epoch_190_0.2517_0.2328.pth"
+  save_path: "runs/094/epoch_360_0.2335_0.2140.pth"
 
 Training:
-  method: "std"
+  method: "ConFIG"
   epochs: 1000
-  batch_size: 5
-  learning_rate: 1e-4
+  batch_size: 2
+  learning_rate: 5e-4
   divergence_loss_weight: 1e-1
-  sigma_min: 0.01
-  gamma: 0.98
+  sigma_min: 0.0
+  gamma: 0.99
   last_lr: 1e-5
 
 device: "cuda:2"

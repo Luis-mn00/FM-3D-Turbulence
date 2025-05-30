@@ -6,10 +6,10 @@ import numpy as np
 from scipy.stats import wasserstein_distance_nd
 import math
 
-from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset, BigSpectralIsotropicTurbulenceDataset
 import utils
 from model_simple import Model_base
-from src.core.models.box.pdedit import PDEDiT3D_S
+from src.core.models.box.pdedit import PDEDiT3D_S, PDEDiT3D_B, PDEDiT3D_L
 
 # Create a folder to save plots
 plot_folder = "generated_plots"
@@ -163,7 +163,7 @@ if __name__ == "__main__":
 
     # Load the trained model
     print("Loading model...")
-    model = PDEDiT3D_S(
+    model = PDEDiT3D_B(
         channel_size=config.Model.channel_size,
         channel_size_out=config.Model.channel_size_out,
         drop_class_labels=config.Model.drop_class_labels,
@@ -176,8 +176,15 @@ if __name__ == "__main__":
 
     # Generate samples using ODE integration
     num_samples = 10
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, num_samples=num_samples, field=None)
-    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True)
+    #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, num_samples=num_samples, field=None)
+    dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
+                                                    norm=config.Data.norm,
+                                                    size=config.Data.size,
+                                                    train_ratio=0.8,
+                                                    val_ratio=0.1,
+                                                    test_ratio=0.1,
+                                                    batch_size=config.Training.batch_size,
+                                                    num_samples=num_samples)
     samples_gt = dataset.test_dataset
     for i in range(samples_gt.shape[0]):
         utils.plot_slice(samples_gt, i, 1, 63, f"gt_sample_{i}")

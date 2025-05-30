@@ -4,12 +4,13 @@ import numpy as np
 import argparse
 import random
 from scipy.interpolate import griddata
-from LSIM.distance_model import DistanceModel
+#from LSIM.distance_model import DistanceModel
 from typing import Optional
 import ot as pot
 from functools import partial
 import math
 import torch.nn as nn
+from LSIM_3D.src.volsim.distance_model import *
 
 def dict2namespace(config):
     namespace = argparse.Namespace()
@@ -191,8 +192,8 @@ def interpolate_dataset(dataset, perc, method="nearest"):
     return X_vals, sampled_ids
 
 
-lsim_model = DistanceModel(baseType="lsim", isTrain=False, useGPU=False)
-lsim_model.load("LSIM/LSiM.pth")
+#lsim_model = DistanceModel(baseType="lsim", isTrain=False, useGPU=False)
+#lsim_model.load("LSIM/LSiM.pth")
 def LSiM_distance(A, B):
     # https://github.com/tum-pbs/LSIM
     # Expected input sizes: [1, 3, 256, 256], [3, 256, 256]  or [256,256]
@@ -232,6 +233,18 @@ def LSiM_distance(A, B):
     A = A.cpu() if type(A) is torch.Tensor else A
     B = B.cpu() if type(B) is torch.Tensor else B
     dist = lsim_model.computeDistance(A, B)
+    return dist[0]
+
+def LSiM_distance_3D(A, B):
+    A = A.squeeze(0)
+    A = A.permute(1, 2, 3, 0)
+    A = A.numpy()
+    B = B.squeeze(0)
+    B = B.permute(1, 2, 3, 0)
+    B = B.numpy()
+    model_3d = DistanceModel.load("LSIM_3D/models/VolSiM.pth")
+    dist = model_3d.computeDistance(A, B, normalize=True, interpolate=False)
+    
     return dist[0]
 
 def diffuse_mask(value_ids, A=1, sig=0.044, search_dist=-1, N=256, Nx=256, Ny=256, Nz=None, tol=1e-6):
