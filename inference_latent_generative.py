@@ -4,11 +4,11 @@ import os
 import yaml
 import numpy as np
 from scipy.stats import wasserstein_distance_nd
+import math
 
-from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset, BigSpectralIsotropicTurbulenceDataset
 import utils
-from model_simple import Model_base
-#from model_ae import Autoencoder
+from src.core.models.box.pdedit import PDEDiT3D_S, PDEDiT3D_B, PDEDiT3D_L
 from model_vqvae import VQVAE, VAE, AE
 
 # Create a folder to save plots
@@ -17,15 +17,27 @@ os.makedirs(plot_folder, exist_ok=True)
 
 # Load the trained latent flow matching model
 def load_latent_model(config, model_path):
-    model = Model_base(config)
+    model = PDEDiT3D_B(
+        channel_size=config.Model.channel_size,
+        channel_size_out=config.Model.channel_size_out,
+        drop_class_labels=config.Model.drop_class_labels,
+        partition_size=config.Model.partition_size,
+        mending=False
+    )
     model.load_state_dict(torch.load(model_path, map_location=config.device))
     model = model.to(config.device)
     model.eval()
     return model
 
 def load_ae_model(config):
-    ae = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
-            device=config.device).to(config.device)
+    ae = VAE(input_size=config_ae.Model.in_channels,
+               image_size=config_ae.Data.grid_size,
+               hidden_size=config_ae.Model.hidden_size,
+               depth=config_ae.Model.depth,
+               num_res_block=config_ae.Model.num_res_block,
+               res_size=config_ae.Model.res_size,
+               device=config.device,
+               z_dim=config_ae.Model.z_dim).to(config.device)
     ae.load_state_dict(torch.load(config.Model.ae_path, map_location=config.device))
     ae = ae.to(config.device)
     ae.eval()
@@ -40,6 +52,7 @@ def integrate_ode_and_sample_latent(config, config_ae, model, ae, num_samples=1,
         print(f"Generating sample {_+1}/{num_samples}")
         # Initialize random sample
         xt = torch.randn((1, config_ae.Model.in_channels, config_ae.Data.grid_size, config_ae.Data.grid_size, config_ae.Data.grid_size), device=config.device)
+        #zt = ae.encode(xt)
         mu, logvar = ae.encode(xt)
         zt = ae.reparameterize(mu, logvar)
 
@@ -47,6 +60,7 @@ def integrate_ode_and_sample_latent(config, config_ae, model, ae, num_samples=1,
             #print(f"Step {i}/{steps}")
             # Predict the flow
             pred = model(zt, t.expand(xt.size(0)))
+            pred = pred.sample
 
             # Update xt using the ODE integration step
             zt = zt + (1 / steps) * pred
@@ -80,7 +94,6 @@ def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
 
     for i, j in zip(reversed(seq), reversed(next_seq)):
         t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)  # Normalize time to [1, 0]
-        t = 1 - t  # Invert to match FM
         #print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
 
         alpha_bar_t = alphas_cumprod[i] if i < len(alphas_cumprod) else alphas_cumprod[-1]
@@ -88,6 +101,7 @@ def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
         
         # Predict velocity v_theta(x_t, t) using the model
         v = model(x, t)
+        v = v.sample
 
         # Convert velocity to noise epsilon
         e = velocity_to_epsilon(v, x, t, alpha_bar_t)
@@ -112,6 +126,7 @@ def generate_samples_with_denoiser_latent(config, config_ae, model, ae, num_samp
         print(f"Generating sample {_+1}/{num_samples}")
         # Ensure the input tensor is in float format to match the model's parameters
         x = torch.randn((1, config_ae.Model.in_channels, config_ae.Data.grid_size, config_ae.Data.grid_size, config_ae.Data.grid_size), device=config.device).float()
+        #z = ae.encode(x)
         mu, logvar = ae.encode(x)
         z = ae.reparameterize(mu, logvar)
         
@@ -127,14 +142,14 @@ def residual_of_generated(samples, samples_gt, config):
     for i in range(len(samples)):
         # Ensure all tensors are on the same device
         sample = samples[i].to(config.device)
-        res, = utils.compute_divergence(sample[:, :3, :, :, :])
+        res, = utils.compute_divergence(sample[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
         rmse_loss[i] = torch.sqrt(torch.mean(res**2))
     
     test_residuals = []
     for i in range(len(samples)):
         sample_gt = samples_gt[i].to(config.device)
         sample_gt = sample_gt.unsqueeze(0)
-        res_gt, = utils.compute_divergence(sample_gt[:, :3, :, :, :])
+        res_gt, = utils.compute_divergence(sample_gt[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
         test_residuals.append(torch.sqrt(torch.mean(res_gt**2)))
         
     print(f"L2 residual: {np.mean(rmse_loss):.4f} +/- {np.std(rmse_loss):.4f}") 
@@ -186,8 +201,16 @@ if __name__ == "__main__":
 
     print("Generating samples (latent FM)...")
     num_samples = 10
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config_ae.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
+    #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config_ae.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
     #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True, grid_size=config.Data.grid_size)
+    dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config_ae.Data.grid_size,
+                                                    norm=config_ae.Data.norm,
+                                                    size=config.Data.size,
+                                                    train_ratio=0.8,
+                                                    val_ratio=0.1,
+                                                    test_ratio=0.1,
+                                                    batch_size=config.Training.batch_size,
+                                                    num_samples=num_samples)
     samples_gt = dataset.test_dataset
 
     samples_fm = integrate_ode_and_sample_latent(config, config_ae, model, ae, num_samples=num_samples)

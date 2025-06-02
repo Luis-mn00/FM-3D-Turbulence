@@ -4,39 +4,33 @@ import os
 import yaml
 import numpy as np
 from scipy.stats import wasserstein_distance_nd
+import math
 
-from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset, BigSpectralIsotropicTurbulenceDataset
 import utils
-from model_simple import Model_base
+from src.core.models.box.pdedit import PDEDiT3D_S, PDEDiT3D_B, PDEDiT3D_L
+from my_config_length import UniProjectionLength
 from diffusion import Diffusion
 
 # Create a folder to save plots
 plot_folder = "generated_plots"
 os.makedirs(plot_folder, exist_ok=True)
 
-# Load the trained model
-def load_model(config, model_path):
-    model = Model_base(config)
-    model.load_state_dict(torch.load(model_path, map_location=config.device))
-    model = model.to(config.device)
-    model.eval()
-    return model
-
 def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
-    seq = list(range(t_start, 0, -t_start // reverse_steps))
-    next_seq = [-1] + seq[:-1]
-    n = x.size(0)  # Batch size
+    seq = range(0, t_start, t_start // reverse_steps) 
+    next_seq = [-1] + list(seq[:-1])
+    n = x.size(0)
 
     for i, j in zip(reversed(seq), reversed(next_seq)):
-        t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)  # Normalize time to [1, 0]
-        t = t_start - t * t_start
-        print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
+        t = (torch.ones(n) * i).to(x.device)
+        #print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
 
         alpha_bar_t = alphas_cumprod[i] if i < len(alphas_cumprod) else alphas_cumprod[-1]
         alpha_bar_next = alphas_cumprod[j] if 0 <= j < len(alphas_cumprod) else alpha_bar_t
 
         # Convert velocity to noise epsilon
         e = model(x, t)
+        e = e.sample
 
         # Classic DDIM x0 prediction and update
         x0_pred = (x - e * (1 - alpha_bar_t).sqrt()) / alpha_bar_t.sqrt()
@@ -61,9 +55,9 @@ def generate_samples_with_denoiser(config, diffusion, model, num_samples):
     samples = []
     for _ in range(num_samples):
         print(f"Generating sample {_+1}/{num_samples}")
-        noise = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device)
-        y_pred, _ = diffusion.ddpm(noise, model, 1000, plot_prog=False)
-        #y_pred = ddim(noise, model, 1000, 20, betas, alphas_cumprod)
+        noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device)
+        #y_pred, _ = diffusion.ddpm(noise, model, 1000, plot_prog=False)
+        y_pred = ddim(noise, model, 1000, 20, betas, alphas_cumprod)
         samples.append(y_pred.cpu().detach())
         
     return samples
@@ -74,14 +68,14 @@ def residual_of_generated(samples, samples_gt, config):
         print("Batch", i)
         # Ensure all tensors are on the same device
         sample = samples[i].to(config.device)
-        res, = utils.compute_divergence(sample[:, :3, :, :, :])
+        res, = utils.compute_divergence(sample[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
         rmse_loss[i] = torch.sqrt(torch.mean(res**2))
     
     test_residuals = []
     for i in range(len(samples)):
         sample_gt = samples_gt[i].to(config.device)
         sample_gt = sample_gt.unsqueeze(0)
-        res_gt, = utils.compute_divergence(sample_gt[:, :3, :, :, :])
+        res_gt, = utils.compute_divergence(sample_gt[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
         test_residuals.append(torch.sqrt(torch.mean(res_gt**2)))
         
     print(f"L2 residual: {np.mean(rmse_loss):.2f} +/- {np.std(rmse_loss):.2f}") 
@@ -119,14 +113,31 @@ if __name__ == "__main__":
     config = utils.dict2namespace(config)
     print(config.device)
 
-    num_samples = 1
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
-    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True)
+    # Generate samples using ODE integration
+    num_samples = 10
+    #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, num_samples=num_samples, field=None)
+    dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
+                                                    norm=config.Data.norm,
+                                                    size=config.Data.size,
+                                                    train_ratio=0.8,
+                                                    val_ratio=0.1,
+                                                    test_ratio=0.1,
+                                                    batch_size=config.Training.batch_size,
+                                                    num_samples=num_samples)
     samples_gt = dataset.test_dataset
     
     # Load the trained model
     print("Loading model...")
-    model = load_model(config, config.Model.save_path)
+    model = PDEDiT3D_B(
+        channel_size=config.Model.channel_size,
+        channel_size_out=config.Model.channel_size_out,
+        drop_class_labels=config.Model.drop_class_labels,
+        partition_size=config.Model.partition_size,
+        mending=False
+    )
+    model.load_state_dict(torch.load(config.Model.save_path, map_location=config.device))
+    model = model.to(config.device)
+    model.eval()
     
     # Diffusion parameters
     diffusion = Diffusion(config)

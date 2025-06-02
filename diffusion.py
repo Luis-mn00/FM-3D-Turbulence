@@ -59,13 +59,14 @@ class Diffusion():
         x = x_inp
 
         for i in reversed(range(t_start)):
-            #print(f"Step {i}/{t_start}")
+            print(f"Step {i}/{t_start}")
             t = (torch.ones(n) * i).to(x.device)
             b = self.betas[i]
             a = self.alphas[i]
             a_b = self.alphas_b[i]
             model_inp = x_inp
             e = model(model_inp, t)
+            e = e.sample
 
             x = (1 / a.sqrt()) * (x - (b / (1 - a_b).sqrt()) * e) 
 

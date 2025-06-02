@@ -9,20 +9,16 @@ Data:
   size: 500
 
 Model:
-  ch: 32
-  out_ch: 4
-  ch_mult: [1, 2]
-  num_res_blocks: 1
-  attn_resolutions: []
-  dropout: 0.1
-  in_channels: 4
-  resamp_with_conv: true
-  save_path: "runs/080/epoch_190_0.0009_0.0314.pth"
+  channel_size: 3  # Number of input channels
+  channel_size_out: 3  # Number of output channels
+  partition_size: [1, 1, 1]  # Partition size for region partitioning
+  drop_class_labels: True  # Whether to drop class labels
+  save_path: "runs/127/epoch_90_0.0672_0.0397.pth"
 
 Training:
   method: "std"
   epochs: 1000
-  batch_size: 2
+  batch_size: 4
   learning_rate: 1e-4
   ddpm_loss_weight: 1e-3
   gamma: 0.98
@@ -35,4 +31,4 @@ Diffusion:
   beta_end: 0.02
   mask_schedule_sig: 3
 
-device: "cuda:2"
+device: "cpu"

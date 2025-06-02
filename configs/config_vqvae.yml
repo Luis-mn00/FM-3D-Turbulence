@@ -6,31 +6,28 @@ Data:
   field: "vorticity"
   norm: true
   shuffle: true
-  size: 100
+  size: 500
 
 Model:
-  in_channels: 4
+  in_channels: 3
   hidden_size: 256
   depth: 3
   num_res_block: 2
-  res_size: 32
-  embedding_size: 512
-  z_dim: 512
-  num_embedding: 1024
-  time_embed_dim: 128
-  hidden_dim: 128
-  n_layers: 3
-  ae_path: "runs/029/epoch_500_1.1170_1.7672.pth"
+  res_size: 8
+  z_dim: 32
+  #ae_path: "runs/029/epoch_500_1.1170_1.7672.pth"
+  #ae_path: "runs/107/epoch_100_13.4575_14.1683.pth"
+  ae_path: "runs/118/epoch_100_31.9642_32.2917.pth"
   
 
 Training:
   method: "std"
-  epochs: 10
-  batch_size: 1
+  epochs: 100
+  batch_size: 5
   learning_rate: 1e-3
   divergence_loss_weight: 1e-3
   gamma: 0.98
   last_lr: 1e-4
   sigma_min: 0.01
 
-device: "cpu"
+device: "cuda:2"

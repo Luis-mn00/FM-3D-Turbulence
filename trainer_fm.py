@@ -44,8 +44,8 @@ def fm_PINN_step(model, xt, t, target, optimizer, config):
 
     # Compute the divergence-free loss
     divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-    #divergence_loss = torch.mean(divergence ** 2)
-    divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
+    divergence_loss = torch.sqrt(torch.mean(divergence ** 2))
+    #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
 
     # Combine the flow matching loss and the divergence-free loss
     total_loss = loss + config.Training.divergence_loss_weight * divergence_loss
@@ -67,7 +67,8 @@ def fm_PINN_dyn_step(model, xt, t, target, optimizer, config):
 
     # Compute the divergence-free loss
     divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-    divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
+    divergence_loss = torch.sqrt(torch.mean(divergence ** 2))
+    #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
 
     # Combine the flow matching loss and the divergence-free loss
     coef = loss / divergence_loss
@@ -90,7 +91,8 @@ def fm_ConFIG_step(model, xt, t, target, optimizer, config, operator):
 
     # Compute the divergence-free loss
     divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-    divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
+    divergence_loss = torch.sqrt(torch.mean(divergence ** 2))
+    #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
     
     # ConFIG
     loss_physics_unscaled = divergence_loss.clone()
@@ -127,7 +129,7 @@ def train_flow_matching(config):
     test_loader = dataset.test_loader
 
     # Initialize the model
-    model = PDEDiT3D_B(
+    model = PDEDiT3D_L(
         channel_size=config.Model.channel_size,
         channel_size_out=config.Model.channel_size_out,
         drop_class_labels=config.Model.drop_class_labels,

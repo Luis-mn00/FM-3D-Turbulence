@@ -6,24 +6,21 @@ Data:
   field: "vorticity"
   norm: true
   shuffle: true
-  size: 100
-  perc: 5
+  size: 500
 
 Model:
-  ch: 32
-  out_ch: 512
-  ch_mult: [1, 2]
-  num_res_blocks: 1
-  attn_resolutions: []
-  dropout: 0.1
-  in_channels: 512
-  resamp_with_conv: true
+  channel_size: 32  # Number of input channels
+  channel_size_out: 32  # Number of output channels
+  partition_size: [1, 1, 1]  # Partition size for region partitioning
+  drop_class_labels: True  # Whether to drop class labels
   #save_path: "runs/068/epoch_10_2.4558_2.4804.pth"
-  save_path: "runs/071/epoch_10_1.4555_1.4560.pth"
+  #save_path: "runs/071/epoch_10_1.4555_1.4560.pth"
+  #save_path: "runs/115/epoch_100_2.2896_2.2566.pth"
+  save_path: "runs/122/epoch_20_1.4402_1.4486.pth"
 
 Training:
   method: "std"
-  epochs: 10
+  epochs: 20
   batch_size: 5
   learning_rate: 1e-4
   divergence_loss_weight: 1e-1
@@ -31,4 +28,4 @@ Training:
   gamma: 0.98
   last_lr: 1e-5
 
-device: "cpu"
+device: "cuda:2"

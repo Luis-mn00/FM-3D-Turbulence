@@ -15,14 +15,6 @@ from src.core.models.box.pdedit import PDEDiT3D_S, PDEDiT3D_B, PDEDiT3D_L
 plot_folder = "generated_plots"
 os.makedirs(plot_folder, exist_ok=True)
 
-# Load the trained model
-def load_model(config, model_path):
-    model = Model_base(config)
-    model.load_state_dict(torch.load(model_path, map_location=config.device))
-    model = model.to(config.device)
-    model.eval()
-    return model
-
 # Integrate ODE and generate samples
 def integrate_ode_and_sample(config, model, num_samples=1, steps=10):
     model.eval().requires_grad_(False)
@@ -70,7 +62,6 @@ def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
 
     for i, j in zip(reversed(seq), reversed(next_seq)):
         t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)  # Normalize time to [1, 0]
-        t = 1 - t  # Invert to match FM
         #print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
 
         alpha_bar_t = alphas_cumprod[i] if i < len(alphas_cumprod) else alphas_cumprod[-1]
@@ -117,6 +108,7 @@ def residual_of_generated(samples, samples_gt, config):
         sample = samples[i].to(config.device)
         res, = utils.compute_divergence(sample[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
         rmse_loss[i] = torch.sqrt(torch.mean(res**2))
+        #rmse_loss[i] = torch.sqrt(torch.sum(res**2))
     
     test_residuals = []
     for i in range(len(samples)):

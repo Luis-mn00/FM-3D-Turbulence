@@ -16,7 +16,7 @@ from conflictfree.grad_operator import ConFIGOperator
 
 from model_vqvae import VQVAE, VAE, AE
 from loss import schedule_KL_annealing
-from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset, BigSpectralIsotropicTurbulenceDataset
 import utils
 from my_config_length import UniProjectionLength
 
@@ -26,9 +26,17 @@ wandb.init(project="Fluid AE")
 
 def train_ae(config):
     print("Loading dataset...")
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size)
+    #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size)
     #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=config.Training.batch_size, grid_size=config.Data.grid_size)
-
+    dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
+                                                    norm=config.Data.norm,
+                                                    size=config.Data.size,
+                                                    train_ratio=0.8,
+                                                    val_ratio=0.1,
+                                                    test_ratio=0.1,
+                                                    batch_size=config.Training.batch_size,
+                                                    num_samples=10)
+    
     # Update the dataloaders
     train_loader = dataset.train_loader
     val_loader = dataset.val_loader
@@ -38,10 +46,22 @@ def train_ae(config):
     
     #model = VQVAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
     #             num_embedding=config.Model.num_embedding, device=config.device).to(config.device)
-    #model = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
-    #            device=config.device).to(config.device)
-    model = AE(input_size=config.Model.in_channels, image_size=config.Data.grid_size, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
-                device=config.device, z_dim=config.Model.z_dim).to(config.device)
+    #model = AE(input_size=config.Model.in_channels,
+    #           image_size=config.Data.grid_size,
+    #           hidden_size=config.Model.hidden_size,
+    #           depth=config.Model.depth,
+    #           num_res_block=config.Model.num_res_block,
+    #           res_size=config.Model.res_size,
+    #           device=config.device,
+    #           z_dim=config.Model.z_dim).to(config.device)
+    model = VAE(input_size=config.Model.in_channels,
+               image_size=config.Data.grid_size,
+               hidden_size=config.Model.hidden_size,
+               depth=config.Model.depth,
+               num_res_block=config.Model.num_res_block,
+               res_size=config.Model.res_size,
+               device=config.device,
+               z_dim=config.Model.z_dim).to(config.device)
     
     # Convert learning_rate and divergence_loss_weight to float if they are strings
     if isinstance(config.Training.learning_rate, str):

@@ -70,7 +70,7 @@ with h5py.File(file_path, 'r') as f:
     keys = list(f['sims']['sim0']['0'].keys())
     print(keys)
     
-"""
+
 
 data = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=500, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=1, grid_size=128)
 train_loader = data.train_loader
@@ -98,7 +98,6 @@ div_fdm = div_fdm.unsqueeze(0)
 utils.plot_slice(div_fdm, 0, 0, int(512/2), name="residual_fdm")
 print(torch.sqrt(torch.sum(div_fdm ** 2)))
 
-"""
 # Define input parameters
 channel_size = 3  # Number of input channels
 channel_size_out = 3  # Number of output channels
@@ -153,3 +152,25 @@ B = raw_data[1].unsqueeze(0)
 dist = utils.LSiM_distance_3D(A, B)
 print(dist)
 """
+
+mesh_grid=MeshGrid([(0, 2*torch.pi, 128),(0, 2*torch.pi, 128), (0, 2*torch.pi, 128)])
+x,y,z=mesh_grid.bc_mesh_grid()
+x = x.squeeze(0).squeeze(0).squeeze(0)
+y = y.squeeze(0).squeeze(0).squeeze(0)
+z = z.squeeze(0).squeeze(0).squeeze(0)
+
+#field = torch.stack([-y, x, torch.zeros_like(z)], dim=0).unsqueeze(0)
+#field = torch.stack([-y*z, x*z, torch.zeros_like(z)], dim=0).unsqueeze(0)
+field = torch.stack([x, y, z], dim=0).unsqueeze(0)
+print(field.shape)
+
+div=Div()
+div_u=div(field,mesh=mesh_grid)
+utils.plot_slice(div_u, 0, 0, int(128/2), name="residual_fsm")
+
+div_fdm = utils.compute_divergence(field, h=2*math.pi/128)
+div_fdm = div_fdm.unsqueeze(0)
+utils.plot_slice(div_fdm, 0, 0, int(128/2), name="residual_fdm")
+
+print(f"||div_u|| (Div operator): {torch.sqrt(torch.mean(div_u ** 2)).item():.8e}")
+print(f"||div_fdm|| (FD method): {torch.sqrt(torch.mean(div_fdm ** 2)).item():.8e}")

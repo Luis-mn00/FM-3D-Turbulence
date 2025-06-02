@@ -7,71 +7,116 @@ import yaml
 import numpy as np
 import utils
 import random
+import math
 
-from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset, BigSpectralIsotropicTurbulenceDataset
 import utils
-from model_simple import Model_base
+from src.core.models.box.pdedit import PDEDiT3D_S, PDEDiT3D_B, PDEDiT3D_L
+from my_config_length import UniProjectionLength
 from diffusion import Diffusion
 
 # Create a folder to save plots
 plot_folder = "generated_plots"
 os.makedirs(plot_folder, exist_ok=True)
 
-# Load the trained model
-def load_model(config, model_path):
-    model = Model_base(config)
-    model.load_state_dict(torch.load(model_path, map_location=config.device))
-    model = model.to(config.device)
-    model.eval()
-    return model
-
 # Linear Beta Schedule (from beta_min to beta_max over the T timesteps)
 def get_linear_beta_schedule(T, beta_min=1e-4, beta_max=0.02):
     betas = torch.linspace(beta_min, beta_max, T)
     alphas = 1.0 - betas
     alphas_cumprod = torch.cumprod(alphas, dim=0)
-    return betas, alphas_cumprod
+    return betas, alphas_cumprod  
 
-# Convert velocity to noise epsilon (based on flow matching)
-def velocity_to_epsilon(v, x, t, alpha_cum_t):
-    alpha_t = alpha_cum_t.sqrt ()
-    sigma_t = (1 - alpha_cum_t).sqrt()
-    delta = 1e-12
-    eps = (v + x / (alpha_t + delta)) / (delta + 1 + sigma_t / (alpha_t + delta))
-    return eps    
-
-def ddim_mask(model, x, x_lr, t_start, reverse_steps, betas, alphas_cumprod, mask):
-    seq = list(range(t_start, 0, -t_start // reverse_steps))
-    next_seq = [-1] + seq[:-1]
+def ddim_interp(model, x, x_lr, t_start, reverse_steps, betas, alphas_cumprod):
+    seq = range(0, t_start, t_start // reverse_steps)
+    next_seq = [-1] + list(seq[:-1])
     n = x.size(0)  # Batch size
 
     for i, j in zip(reversed(seq), reversed(next_seq)):
-        t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)  # Normalize time to [1, 0]
-        t = 1 - t  # Invert to match FM
+        t = (torch.ones(n) * i).to(x.device)
         #print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
 
         alpha_bar_t = alphas_cumprod[i] if i < len(alphas_cumprod) else alphas_cumprod[-1]
         alpha_bar_next = alphas_cumprod[j] if 0 <= j < len(alphas_cumprod) else alpha_bar_t
         
-        # Predict velocity v_theta(x_t, t) using the model
-        v = model(x, t)
-
-        # Convert velocity to noise epsilon
-        e = velocity_to_epsilon(v, x, t, alpha_bar_t)
+        e = model(x, t)
+        e = e.sample
 
         # Classic DDIM x0 prediction and update
         x0_pred = (x - e * (1 - alpha_bar_t).sqrt()) / alpha_bar_t.sqrt()
         
-        mask_t = mask * t
+        x_interp = x0_pred * (1 - t / t_start) + x_lr * (t / t_start)
+        
+        x = alpha_bar_next.sqrt() * x_interp + (1 - alpha_bar_next).sqrt() * e
+
+        # Free memory of intermediate tensors
+        del e, x0_pred
+        torch.cuda.empty_cache()
+
+    return x
+
+def ddim_mask(model, x, x_lr, t_start, reverse_steps, betas, alphas_cumprod, mask):
+    seq = range(0, t_start, t_start // reverse_steps)
+    next_seq = [-1] + list(seq[:-1])
+    n = x.size(0)  # Batch size
+
+    for i, j in zip(reversed(seq), reversed(next_seq)):
+        t = (torch.ones(n) * i).to(x.device)
+        #print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
+
+        alpha_bar_t = alphas_cumprod[i] if i < len(alphas_cumprod) else alphas_cumprod[-1]
+        alpha_bar_next = alphas_cumprod[j] if 0 <= j < len(alphas_cumprod) else alpha_bar_t
+        
+        e = model(x, t)
+        e = e.sample
+
+        # Classic DDIM x0 prediction and update
+        x0_pred = (x - e * (1 - alpha_bar_t).sqrt()) / alpha_bar_t.sqrt()
+        
+        mask_t = mask * (t / t_start)**2
         x_masked = x0_pred * (1 - mask_t) + x_lr * mask_t
         
         x = alpha_bar_next.sqrt() * x_masked + (1 - alpha_bar_next).sqrt() * e
 
         # Free memory of intermediate tensors
-        del v, e, x0_pred
+        del e, x0_pred
         torch.cuda.empty_cache()
 
     return x
+
+def ddpm_interp_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids, perc, t_start=1000, reverse_steps=20, T=1000):
+    betas, alphas_cumprod = get_linear_beta_schedule(config.Diffusion.num_diffusion_timesteps, config.Diffusion.beta_start, config.Diffusion.beta_end)
+    
+    losses = []
+    residuals = []
+    residuals_gt = []
+    residuals_diff = []
+    lsim = []
+    
+    for i in range(nsamples):
+        print(f"Sample {i+1}/{nsamples}")
+        x     = samples_x[i].unsqueeze(0).to(config.device)
+        y     = samples_y[i].unsqueeze(0).to(config.device)
+        noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
+        
+        y_pred = ddim_interp(model, noise.clone(), x.clone(), t_start, reverse_steps, betas, alphas_cumprod)
+        utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
+                                 y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
+                                 y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
+                                 f"super_interp_ddpm_{i}")
+
+        losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
+        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
+        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
+        residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
+        # Detach tensors before passing them to LSiM_distance
+        y = y.detach()
+        y_pred = y_pred.detach()
+        lsim.append(utils.LSiM_distance_3D(y, y_pred))
+        
+    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
+    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
+    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
+    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     
 def ddpm_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids, perc, t_start=1000, reverse_steps=20, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(config.Diffusion.num_diffusion_timesteps, config.Diffusion.beta_start, config.Diffusion.beta_end)
@@ -86,13 +131,13 @@ def ddpm_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, s
         print(f"Sample {i+1}/{nsamples}")
         x     = samples_x[i].unsqueeze(0).to(config.device)
         y     = samples_y[i].unsqueeze(0).to(config.device)
-        noise = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
+        noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
 
         mask = torch.zeros(config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).flatten()
         mask[samples_ids[i]] = 1
         mask = mask.reshape(config.Data.grid_size, config.Data.grid_size, config.Data.grid_size)
         mask = mask.unsqueeze(0).unsqueeze(0)  # (1, 1, D, D, D)
-        mask = mask.repeat(1, config.Model.in_channels, 1, 1, 1)  # (1, C, D, D, D)
+        mask = mask.repeat(1, config.Model.channel_size, 1, 1, 1)  # (1, C, D, D, D)
         mask = mask.to(config.device)
         mask_tmp = torch.rand(noise.shape, device=noise.device) < 1.0
         mask = torch.clamp(mask + mask_tmp, max=1)
@@ -104,13 +149,13 @@ def ddpm_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, s
                                  f"super_mask_ddpm_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
-        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :])**2)).item())
-        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :])**2)).item())
+        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
+        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
         residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
         # Detach tensors before passing them to LSiM_distance
         y = y.detach()
         y_pred = y_pred.detach()
-        lsim.append(utils.LSiM_distance(y, y_pred))
+        lsim.append(utils.LSiM_distance_3D(y, y_pred))
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
@@ -126,7 +171,7 @@ def ddpm_diff_mask_sparse_experiment(config, model, nsamples, samples_x, samples
     residuals_diff = []
     lsim = []
     
-    diffuse_masks = torch.zeros(len(samples_ids), config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
+    diffuse_masks = torch.zeros(len(samples_ids), config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
     for j in range(len(samples_ids)):
         # Use the correct number of total voxels for 3D
         total_voxels = config.Data.grid_size ** 3
@@ -137,16 +182,14 @@ def ddpm_diff_mask_sparse_experiment(config, model, nsamples, samples_x, samples
             Ny=config.Data.grid_size,
             Nz=config.Data.grid_size
         )
-        diffuse_masks[j] = torch.tensor(mask, dtype=torch.float).unsqueeze(0).repeat(config.Model.in_channels, 1, 1, 1)
+        diffuse_masks[j] = torch.tensor(mask, dtype=torch.float).unsqueeze(0).repeat(config.Model.channel_size, 1, 1, 1)
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
         x     = samples_x[i].unsqueeze(0).to(config.device)
         y     = samples_y[i].unsqueeze(0).to(config.device)
-        noise = torch.randn((1, config.Model.in_channels, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
+        noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
 
-        print(diffuse_masks.shape)
-        print(diffuse_masks[i].unsqueeze(0).shape)
         y_pred = ddim_mask(model, noise.clone(), x.clone(), t_start, reverse_steps, betas, alphas_cumprod, diffuse_masks[i].unsqueeze(0))
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
@@ -154,13 +197,13 @@ def ddpm_diff_mask_sparse_experiment(config, model, nsamples, samples_x, samples
                                  f"super_diff_mask_ddpm_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
-        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :])**2)).item())
-        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :])**2)).item())
+        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
+        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
         residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
         # Detach tensors before passing them to LSiM_distance
         y = y.detach()
         y_pred = y_pred.detach()
-        lsim.append(utils.LSiM_distance(y, y_pred))
+        lsim.append(utils.LSiM_distance_3D(y, y_pred))
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
@@ -175,16 +218,35 @@ if __name__ == "__main__":
     config = utils.dict2namespace(config)
     print(config.device)
     
-    print("Loading dataset...")
+    # Generate samples using ODE integration
     num_samples = 10
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
-    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True)
+    #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, num_samples=num_samples, field=None)
+    dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
+                                                    norm=config.Data.norm,
+                                                    size=config.Data.size,
+                                                    train_ratio=0.8,
+                                                    val_ratio=0.1,
+                                                    test_ratio=0.1,
+                                                    batch_size=config.Training.batch_size,
+                                                    num_samples=num_samples)
+    samples_gt = dataset.test_dataset
+    
+    # Load the trained model
+    print("Loading model...")
+    model = PDEDiT3D_B(
+        channel_size=config.Model.channel_size,
+        channel_size_out=config.Model.channel_size_out,
+        drop_class_labels=config.Model.drop_class_labels,
+        partition_size=config.Model.partition_size,
+        mending=False
+    )
+    model.load_state_dict(torch.load(config.Model.save_path, map_location=config.device))
+    model = model.to(config.device)
+    model.eval()
     samples_y = dataset.test_dataset
     perc = 5
     samples_x, samples_ids = utils.interpolate_dataset(samples_y, perc/100)
-
-    print("Loading model...")
-    model = load_model(config, config.Model.save_path)
     
+    ddpm_interp_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)
     ddpm_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)
-    #ddpm_diff_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc, w_mask=1, sig=0.044)
+    ddpm_diff_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc, w_mask=1, sig=0.044)

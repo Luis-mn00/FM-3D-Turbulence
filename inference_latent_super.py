@@ -7,10 +7,11 @@ import yaml
 import numpy as np
 import utils
 import random
+import math
 
-from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset, BigSpectralIsotropicTurbulenceDataset
 import utils
-from model_simple import Model_base
+from src.core.models.box.pdedit import PDEDiT3D_S, PDEDiT3D_B, PDEDiT3D_L
 #from model_ae import Autoencoder
 from model_vqvae import VQVAE, VAE, AE
 
@@ -20,15 +21,27 @@ os.makedirs(plot_folder, exist_ok=True)
 
 # Load the trained latent flow matching model
 def load_latent_model(config, model_path):
-    model = Model_base(config)
+    model = PDEDiT3D_B(
+        channel_size=config.Model.channel_size,
+        channel_size_out=config.Model.channel_size_out,
+        drop_class_labels=config.Model.drop_class_labels,
+        partition_size=config.Model.partition_size,
+        mending=False
+    )
     model.load_state_dict(torch.load(model_path, map_location=config.device))
     model = model.to(config.device)
     model.eval()
     return model
 
 def load_ae_model(config):
-    ae = VAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
-            device=config.device).to(config.device)
+    ae = VAE(input_size=config_ae.Model.in_channels,
+               image_size=config_ae.Data.grid_size,
+               hidden_size=config_ae.Model.hidden_size,
+               depth=config_ae.Model.depth,
+               num_res_block=config_ae.Model.num_res_block,
+               res_size=config_ae.Model.res_size,
+               device=config.device,
+               z_dim=config_ae.Model.z_dim).to(config.device)
     ae.load_state_dict(torch.load(config.Model.ae_path, map_location=config.device))
     ae = ae.to(config.device)
     ae.eval()
@@ -41,6 +54,7 @@ def fm_interp_latent(model, z, z_lr, steps):
     for i, t in enumerate(torch.linspace(0, 1, steps, device=zt.device, dtype=torch.float32), start=1):
         #print(f"Latent Step {i}/{steps}")
         pred = model(zt, t.expand(zt.size(0)))
+        pred = pred.sample
         zt = zt + (1 / steps) * (z_lr - zt + t * pred)
         
     return zt
@@ -74,12 +88,12 @@ def fm_interp_sparse_experiment_latent(config, config_ae, model, ae, nsamples, s
                                  y[0, 1, :, :, int(config_ae.Data.grid_size / 2)].cpu().detach().numpy(),
                                  f"super_latent_interp_{i}")
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
-        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :])**2)).item())
-        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :])**2)).item())
+        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
+        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
         residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
         y = y.detach()
         y_pred = y_pred.detach()
-        lsim.append(utils.LSiM_distance(y, y_pred))
+        lsim.append(utils.LSiM_distance_3D(y, y_pred))
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}")
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
@@ -100,6 +114,7 @@ def fm_mask(fm_model, ae_model, x, x_lr, steps, mask):
 
         # Flow Matching model prediction in latent space
         pred = fm_model(zt, t.expand(zt.size(0)))  # predicted vector field
+        pred = pred.sample
         z1_pred = zt + (1 - t) * pred              # latent prediction
 
         # Decode to physical space to apply masking
@@ -150,13 +165,13 @@ def fm_mask_sparse_experiment_latent(config, config_ae, model, ae, nsamples, sam
                                  f"super_latent_mask_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
-        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :])**2)).item())
-        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :])**2)).item())
+        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
+        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
         residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
         # Detach tensors before passing them to LSiM_distance
         y = y.detach()
         y_pred = y_pred.detach()
-        lsim.append(utils.LSiM_distance(y, y_pred))
+        lsim.append(utils.LSiM_distance_3D(y, y_pred))
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
@@ -197,13 +212,13 @@ def fm_diff_mask_sparse_experiment_latent(config, config_ae, model, ae, nsamples
                                  f"super_latent_diff_mask_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
-        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :])**2)).item())
-        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :])**2)).item())
+        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
+        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
         residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
         # Detach tensors before passing them to LSiM_distance
         y = y.detach()
         y_pred = y_pred.detach()
-        lsim.append(utils.LSiM_distance(y, y_pred))
+        lsim.append(utils.LSiM_distance_3D(y, y_pred))
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
@@ -233,13 +248,21 @@ if __name__ == "__main__":
     
     print("Loading dataset...")
     num_samples = 10
-    dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config_ae.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
+    #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config_ae.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
     #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True, grid_size=config.Data.grid_size)
+    dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config_ae.Data.grid_size,
+                                                    norm=config_ae.Data.norm,
+                                                    size=config.Data.size,
+                                                    train_ratio=0.8,
+                                                    val_ratio=0.1,
+                                                    test_ratio=0.1,
+                                                    batch_size=config.Training.batch_size,
+                                                    num_samples=num_samples)
     samples_y = dataset.test_dataset
     perc = 5
     samples_x, samples_ids = utils.interpolate_dataset(samples_y, perc/100)
     
     print("Generating samples (latent FM)...")
     fm_interp_sparse_experiment_latent(config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids, perc=perc)
-    #fm_mask_sparse_experiment_latent(config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids, perc)
-    #fm_diff_mask_sparse_experiment_latent(config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids, perc)
+    fm_mask_sparse_experiment_latent(config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids, perc)
+    fm_diff_mask_sparse_experiment_latent(config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids, perc)

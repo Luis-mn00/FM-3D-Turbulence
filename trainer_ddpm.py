@@ -8,10 +8,11 @@ import matplotlib.pyplot as plt
 import wandb
 from conflictfree.utils import get_gradient_vector
 from conflictfree.grad_operator import ConFIGOperator
+import math
 
-from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset, BigSpectralIsotropicTurbulenceDataset
 import utils
-from model_simple import Model_base
+from src.core.models.box.pdedit import PDEDiT3D_S, PDEDiT3D_B, PDEDiT3D_L
 from my_config_length import UniProjectionLength
 from diffusion import Diffusion
 
@@ -25,6 +26,7 @@ def ddpm_standard_step(model, diffusion, y, optimizer, config):
 
     x_t, noise = diffusion.forward(y, t)
     e_pred = model(x_t, t)
+    e_pred = e_pred.sample
     mse_loss = (noise - e_pred).square().mean()
 
     mse_loss.backward()
@@ -35,8 +37,8 @@ def ddpm_standard_step(model, diffusion, y, optimizer, config):
         a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
         a_b = a_b.view(-1, 1, 1, 1, 1)
         x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
-        eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :])
-        eq_res_m = torch.mean(eq_residual ** 2)
+        eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+        eq_res_m = torch.sqrt(torch.mean(eq_residual ** 2))
 
     return mse_loss, eq_res_m
 
@@ -46,6 +48,7 @@ def ddpm_PINN_step(model, diffusion, y, optimizer, config):
 
     x_t, noise = diffusion.forward(y, t)
     e_pred = model(x_t, t)
+    e_pred = e_pred.sample
     mse_loss = (noise - e_pred).square().mean()
 
     # Compute res_loss for metrics comparison
@@ -53,8 +56,8 @@ def ddpm_PINN_step(model, diffusion, y, optimizer, config):
         a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
         a_b = a_b.view(-1, 1, 1, 1, 1)
         x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
-        eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :])
-        eq_res_m = torch.mean(eq_residual ** 2)
+        eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+        eq_res_m = torch.sqrt(torch.mean(eq_residual ** 2))
         
     total_loss = mse_loss + config.Training.ddpm_loss_weight * eq_res_m
     total_loss.backward()
@@ -68,6 +71,7 @@ def ddpm_PINN_dyn_step(model, diffusion, y, optimizer, config):
 
     x_t, noise = diffusion.forward(y, t)
     e_pred = model(x_t, t)
+    e_pred = e_pred.sample
     mse_loss = (noise - e_pred).square().mean()
 
     # Compute res_loss for metrics comparison
@@ -75,8 +79,8 @@ def ddpm_PINN_dyn_step(model, diffusion, y, optimizer, config):
         a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
         a_b = a_b.view(-1, 1, 1, 1, 1)
         x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
-        eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :])
-        eq_res_m = torch.mean(eq_residual ** 2)
+        eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+        eq_res_m = torch.sqrt(torch.mean(eq_residual ** 2))
         
     coef = mse_loss / eq_res_m
         
@@ -92,6 +96,7 @@ def ddpm_ConFIG_step(model, diffusion, y, optimizer, config, operator):
 
     x_t, noise = diffusion.forward(y, t)
     e_pred = model(x_t, t)
+    e_pred = e_pred.sample
     mse_loss = (noise - e_pred).square().mean()
 
     # Compute res_loss for metrics comparison
@@ -99,8 +104,8 @@ def ddpm_ConFIG_step(model, diffusion, y, optimizer, config, operator):
         a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
         a_b = a_b.view(-1, 1, 1, 1, 1)
         x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
-        eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :])
-        eq_res_m = torch.mean(eq_residual ** 2)
+        eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+        eq_res_m = torch.sqrt(torch.mean(eq_residual ** 2))
     
     # ConFIG
     loss_physics_unscaled = eq_res_m.clone()
@@ -120,8 +125,16 @@ def train_ddpm(config):
     # Load the dataset
     print("Loading dataset...")
     #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size)
-    dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=config.Data.size, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=config.Training.batch_size, grid_size=config.Data.grid_size)
-
+    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=config.Data.size, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=config.Training.batch_size, grid_size=config.Data.grid_size)
+    dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
+                                                    norm=config.Data.norm,
+                                                    size=config.Data.size,
+                                                    train_ratio=0.8,
+                                                    val_ratio=0.1,
+                                                    test_ratio=0.1,
+                                                    batch_size=config.Training.batch_size,
+                                                    num_samples=10)
+    
     # Update the dataloaders
     train_loader = dataset.train_loader
     val_loader = dataset.val_loader
@@ -131,7 +144,13 @@ def train_ddpm(config):
     diffusion = Diffusion(config)
 
     # Initialize the model
-    model = Model_base(config)
+    model = PDEDiT3D_B(
+        channel_size=config.Model.channel_size,
+        channel_size_out=config.Model.channel_size_out,
+        drop_class_labels=config.Model.drop_class_labels,
+        partition_size=config.Model.partition_size,
+        mending=False
+    )
     model = model.to(config.device)
 
     # Convert learning_rate and divergence_loss_weight to float if they are strings
@@ -176,22 +195,22 @@ def train_ddpm(config):
             
             # Perform the training step
             if config.Training.method == "std":
-                mse_loss, physics_loss = ddpm_standard_step(model, diffusion, x1, optimizer, config)
+                loss, physics_loss = ddpm_standard_step(model, diffusion, x1, optimizer, config)
                 
             elif config.Training.method == "PINN":
-                mse_loss, physics_loss = ddpm_PINN_step(model, diffusion, x1, optimizer, config)
+                loss, physics_loss = ddpm_PINN_step(model, diffusion, x1, optimizer, config)
                 
             elif config.Training.method == "PINN_dyn":
-                mse_loss, physics_loss = ddpm_PINN_dyn_step(model, diffusion, x1, optimizer, config)
+                loss, physics_loss = ddpm_PINN_dyn_step(model, diffusion, x1, optimizer, config)
                 
             elif config.Training.method == "ConFIG":
                 operator = ConFIGOperator(length_model=UniProjectionLength())
-                mse_loss, physics_loss = ddpm_ConFIG_step(model, diffusion, x1, optimizer, config, operator)
+                loss, physics_loss = ddpm_ConFIG_step(model, diffusion, x1, optimizer, config, operator)
                 
             else:
                 raise ValueError(f"Unknown training method: {config.Training.method}")
             
-            mse_loss += mse_loss.item()
+            mse_loss += loss.item()
             
         mse_loss /= len(train_loader)
         mse_losses.append(mse_loss)
@@ -206,6 +225,7 @@ def train_ddpm(config):
                 t = torch.randint(0, diffusion.num_timesteps, size=(batch_size,), device=val_batch.device)
                 x_t, noise = diffusion.forward(val_batch, t)
                 e_pred = model(x_t, t)
+                e_pred = e_pred.sample
                 val_loss += (noise - e_pred).square().mean()
                 
         val_loss /= len(val_loader)
