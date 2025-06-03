@@ -56,18 +56,22 @@ def velocity_to_epsilon(v, x, t, alpha_cum_t):
     
 # DDIM sampling (using reverse diffusion with flow matching)
 def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
+    #seq = range(0, t_start, t_start // reverse_steps) 
+    #next_seq = [-1] + list(seq[:-1])
     seq = list(range(t_start, 0, -t_start // reverse_steps))
-    next_seq = [-1] + seq[:-1]
-    n = x.size(0)  # Batch size
+    next_seq = [-1] + (seq[:-1])
+    n = x.size(0)
 
     for i, j in zip(reversed(seq), reversed(next_seq)):
+        #t = (torch.ones(n) * i).to(x.device)
         t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)  # Normalize time to [1, 0]
-        #print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
+        print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
 
         alpha_bar_t = alphas_cumprod[i] if i < len(alphas_cumprod) else alphas_cumprod[-1]
         alpha_bar_next = alphas_cumprod[j] if 0 <= j < len(alphas_cumprod) else alpha_bar_t
         
         # Predict velocity v_theta(x_t, t) using the model
+        #v = model(x, 1 - t / t_start)
         v = model(x, t)
         v = v.sample
 
@@ -167,7 +171,7 @@ if __name__ == "__main__":
     model.eval()
 
     # Generate samples using ODE integration
-    num_samples = 10
+    num_samples = 1
     #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, num_samples=num_samples, field=None)
     dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
                                                     norm=config.Data.norm,
@@ -182,16 +186,16 @@ if __name__ == "__main__":
         utils.plot_slice(samples_gt, i, 1, 63, f"gt_sample_{i}")
     
     print("Generating samples...")
-    samples_fm = integrate_ode_and_sample(config, model, num_samples=num_samples, steps=100)
-    for i, sample in enumerate(samples_fm):
-        utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
+    #samples_fm = integrate_ode_and_sample(config, model, num_samples=num_samples, steps=100)
+    #for i, sample in enumerate(samples_fm):
+    #    utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
         
     # Generate samples using the denoising model
     samples_ddim = generate_samples_with_denoiser(config, model, num_samples, t_start=1000, reverse_steps=20, T=1000)
     for i, sample in enumerate(samples_ddim):
         utils.plot_slice(sample, 0, 1, 63, f"generated_sample_diff_{i}")
         
-    residual_of_generated(samples_fm, samples_gt, config)
-    test_wasserstein(samples_fm, samples_gt, config)
+    #residual_of_generated(samples_fm, samples_gt, config)
+    #test_wasserstein(samples_fm, samples_gt, config)
     residual_of_generated(samples_ddim, samples_gt, config)
     test_wasserstein(samples_ddim, samples_gt, config)

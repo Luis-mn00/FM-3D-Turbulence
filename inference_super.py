@@ -194,7 +194,7 @@ def velocity_to_epsilon(v, x, t, alpha_cum_t):
 def ddim_interp(model, x, x_lr, t_start, reverse_steps, betas, alphas_cumprod):
     seq = list(range(t_start, 0, -t_start // reverse_steps))
     next_seq = [-1] + seq[:-1]
-    n = x.size(0)  # Batch size
+    n = x.size(0)
 
     for i, j in zip(reversed(seq), reversed(next_seq)):
         t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)  # Normalize time to [1, 0]
@@ -206,7 +206,7 @@ def ddim_interp(model, x, x_lr, t_start, reverse_steps, betas, alphas_cumprod):
         # Predict velocity v_theta(x_t, t) using the model
         v = model(x, t)
         v = v.sample
-
+        
         # Convert velocity to noise epsilon
         e = velocity_to_epsilon(v, x, t, alpha_bar_t)
 
@@ -225,11 +225,11 @@ def ddim_interp(model, x, x_lr, t_start, reverse_steps, betas, alphas_cumprod):
 
 def ddim_mask(model, x, x_lr, t_start, reverse_steps, betas, alphas_cumprod, mask):
     seq = list(range(t_start, 0, -t_start // reverse_steps))
-    next_seq = [-1] + seq[:-1]
+    next_seq = [-1] + (seq[:-1])
     n = x.size(0)  # Batch size
 
     for i, j in zip(reversed(seq), reversed(next_seq)):
-        t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)  # Normalize time to [1, 0]
+        t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)
         #print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
 
         alpha_bar_t = alphas_cumprod[i] if i < len(alphas_cumprod) else alphas_cumprod[-1]
@@ -395,7 +395,7 @@ if __name__ == "__main__":
         print(f"CUDA device name: {torch.cuda.get_device_name(torch.cuda.current_device())}")
     
     print("Loading dataset...")
-    num_samples = 10
+    num_samples = 1
     #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
     dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
                                                     norm=config.Data.norm,

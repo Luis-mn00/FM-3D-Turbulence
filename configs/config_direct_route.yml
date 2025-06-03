@@ -1,33 +1,29 @@
 Data:
   dt: 0.1
   perc: 5
-  grid_size: 64
+  grid_size: 128
   seed: 1234
   crop: "crop"
   field: "vorticity"
   norm: true
   shuffle: true
-  size: 100
+  size: 500
 
 Model:
-  ch: 32
-  out_ch: 4
-  ch_mult: [1, 2]
-  num_res_blocks: 1
-  attn_resolutions: []
-  dropout: 0.1
-  in_channels: 4
-  resamp_with_conv: true
-  save_path: "runs/076/epoch_10_0.0435_0.0505.pth"
+  channel_size: 3  # Number of input channels
+  channel_size_out: 3  # Number of output channels
+  partition_size: [1, 1, 1]  # Partition size for region partitioning
+  drop_class_labels: True  # Whether to drop class labels
+  save_path: "runs/138/epoch_140_0.0544_0.0587.pth"
 
 Training:
   method: "std"
   epochs: 1000
-  batch_size: 2
+  batch_size: 4
   learning_rate: 1e-4
   divergence_loss_weight: 1e-3
-  sigma_min: 0.01
+  sigma_min: 0.0
   gamma: 0.98
   last_lr: 1e-5
 
-device: "cuda:3"
+device: "cpu"

@@ -88,19 +88,19 @@ def velocity_to_epsilon(v, x, t, alpha_cum_t):
     
 # DDIM sampling (using reverse diffusion with flow matching)
 def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
-    seq = list(range(t_start, 0, -t_start // reverse_steps))
-    next_seq = [-1] + seq[:-1]
-    n = x.size(0)  # Batch size
+    seq = range(0, t_start, t_start // reverse_steps) 
+    next_seq = [-1] + list(seq[:-1])
+    n = x.size(0)
 
     for i, j in zip(reversed(seq), reversed(next_seq)):
-        t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)  # Normalize time to [1, 0]
+        t = (torch.ones(n) * i).to(x.device)
         #print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
 
         alpha_bar_t = alphas_cumprod[i] if i < len(alphas_cumprod) else alphas_cumprod[-1]
         alpha_bar_next = alphas_cumprod[j] if 0 <= j < len(alphas_cumprod) else alpha_bar_t
         
         # Predict velocity v_theta(x_t, t) using the model
-        v = model(x, t)
+        v = model(x, 1 - t / t_start)
         v = v.sample
 
         # Convert velocity to noise epsilon

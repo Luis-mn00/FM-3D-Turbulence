@@ -145,6 +145,7 @@ class Diffusion():
             a_next_b = self.alphas_b[j] if i > 0 else torch.ones(1, device=x.device)
 
             e = model(x, t)
+            e = e.sample
 
             x0_pred = (x - e * (1 - a_b).sqrt()) / a_b.sqrt()
             x = a_next_b.sqrt() * x0_pred + (1 - a_next_b).sqrt() * e
