@@ -88,8 +88,8 @@ def fm_interp_sparse_experiment_latent(config, config_ae, model, ae, nsamples, s
                                  y[0, 1, :, :, int(config_ae.Data.grid_size / 2)].cpu().detach().numpy(),
                                  f"super_latent_interp_{i}")
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
-        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
-        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
+        residuals.append(torch.mean(torch.abs(utils.compute_divergence(y_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size))).item())
+        residuals_gt.append(torch.mean(torch.abs(utils.compute_divergence(y[:, :3, :, :, :], 2*math.pi/config.Data.grid_size))).item())
         residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
         y = y.detach()
         y_pred = y_pred.detach()
@@ -165,8 +165,8 @@ def fm_mask_sparse_experiment_latent(config, config_ae, model, ae, nsamples, sam
                                  f"super_latent_mask_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
-        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
-        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
+        residuals.append(torch.mean(torch.abs(utils.compute_divergence(y_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size))).item())
+        residuals_gt.append(torch.mean(torch.abs(utils.compute_divergence(y[:, :3, :, :, :], 2*math.pi/config.Data.grid_size))).item())
         residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
         # Detach tensors before passing them to LSiM_distance
         y = y.detach()
@@ -212,8 +212,8 @@ def fm_diff_mask_sparse_experiment_latent(config, config_ae, model, ae, nsamples
                                  f"super_latent_diff_mask_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
-        residuals.append(torch.sqrt(torch.mean(utils.compute_divergence(y_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
-        residuals_gt.append(torch.sqrt(torch.mean(utils.compute_divergence(y[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)**2)).item())
+        residuals.append(torch.mean(torch.abs(utils.compute_divergence(y_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size))).item())
+        residuals_gt.append(torch.mean(torch.abs(utils.compute_divergence(y[:, :3, :, :, :], 2*math.pi/config.Data.grid_size))).item())
         residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
         # Detach tensors before passing them to LSiM_distance
         y = y.detach()

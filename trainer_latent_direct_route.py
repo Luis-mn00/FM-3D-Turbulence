@@ -8,21 +8,22 @@ import matplotlib.pyplot as plt
 import wandb
 from conflictfree.utils import get_gradient_vector
 from conflictfree.grad_operator import ConFIGOperator
+import math
 
-from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset
+from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset, BigSpectralIsotropicTurbulenceDataset, SupervisedSpectralTurbulenceDataset
 import utils
 from my_config_length import UniProjectionLength
-from model_simple import Model_base
-from model_ae import CVAE_3D_II
 from model_vqvae import VQVAE, VAE, AE
+from src.core.models.box.pdedit import PDEDiT3D_S, PDEDiT3D_B, PDEDiT3D_L
 
 wandb.login(key="f4a726b2fe7929990149e82fb88da423cfa74e46")
 
-wandb.init(project="fm")
+wandb.init(project="Latent fm DP")
 
 def fm_standard_step(model, xt, t, target, optimizer, config):
     # Forward pass
     pred = model(xt, t)
+    pred = pred.sample
     loss = ((target - pred) ** 2).mean()
     total_loss = loss
     
@@ -33,34 +34,106 @@ def fm_standard_step(model, xt, t, target, optimizer, config):
     
     return total_loss, loss
 
-class RegressionDataset(Dataset):
-    def __init__(self, low_res_images, high_res_images):
-        self.low_res_images = low_res_images
-        self.high_res_images = high_res_images
+def fm_PINN_step(model, xt, t, target, optimizer, config):
+    # Forward pass
+    pred = model(xt, t)
+    pred = pred.sample
+    loss = ((target - pred) ** 2).mean()
+    
+    x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
 
-    def __len__(self):
-        return len(self.low_res_images)
+    # Compute the divergence-free loss
+    divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+    divergence_loss = torch.mean(torch.abs(divergence))
 
-    def __getitem__(self, idx):
-        low_res = self.low_res_images[idx]
-        high_res = self.high_res_images[idx]
+    # Combine the flow matching loss and the divergence-free loss
+    total_loss = loss + config.Training.divergence_loss_weight * divergence_loss
+    
+    # Backward pass and optimization
+    optimizer.zero_grad()
+    total_loss.backward()
+    optimizer.step()
+    
+    return total_loss, loss
 
-        return low_res, high_res
+def fm_PINN_dyn_step(model, xt, t, target, optimizer, config):
+    # Forward pass
+    pred = model(xt, t)
+    pred = pred.sample
+    loss = ((target - pred) ** 2).mean()
+    
+    x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
 
-def create_dataloader(low_res_images, high_res_images, batch_size):
-    dataset = RegressionDataset(low_res_images, high_res_images)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    # Compute the divergence-free loss
+    divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+    divergence_loss = torch.mean(torch.abs(divergence))
+
+    # Combine the flow matching loss and the divergence-free loss
+    coef = loss / divergence_loss
+    total_loss = loss + coef * divergence_loss
+    
+    # Backward pass and optimization
+    optimizer.zero_grad()
+    total_loss.backward()
+    optimizer.step()
+    
+    return total_loss, loss
+
+def fm_ConFIG_step(model, xt, t, target, optimizer, config, operator):
+    # Forward pass
+    pred = model(xt, t)
+    pred = pred.sample
+    loss = ((target - pred) ** 2).mean()
+    
+    x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
+
+    # Compute the divergence-free loss
+    divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+    divergence_loss = torch.mean(torch.abs(divergence))
+    
+    # ConFIG
+    loss_physics_unscaled = divergence_loss.clone()
+    loss.backward(retain_graph=True)
+    grads_1 = get_gradient_vector(model, none_grad_mode="skip")
+    optimizer.zero_grad()
+    divergence_loss.backward()
+    grads_2 = get_gradient_vector(model, none_grad_mode="skip")
+
+    operator.update_gradient(model, [grads_1, grads_2])
+    optimizer.step()
+    
+    total_loss = loss + config.Training.divergence_loss_weight * divergence_loss
+    
+    return total_loss, loss
 
 # Define the training function
 def train_flow_matching(config, config_ae):
     # Load the dataset
-    dataset = IsotropicTurbulenceDataset(dt=config_ae.Data.dt, grid_size=config_ae.Data.grid_size, crop=config_ae.Data.crop, seed=config_ae.Data.seed, size=config_ae.Data.size, batch_size=config.Training.batch_size)
+    #dataset = IsotropicTurbulenceDataset(dt=config_ae.Data.dt, grid_size=config_ae.Data.grid_size, crop=config_ae.Data.crop, seed=config_ae.Data.seed, size=config_ae.Data.size, batch_size=config.Training.batch_size)
     #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=config.Training.batch_size)
-
+    dataset = SupervisedSpectralTurbulenceDataset(grid_size=config.Data.grid_size,
+                                                    norm=config.Data.norm,
+                                                    size=config.Data.size,
+                                                    train_ratio=0.8,
+                                                    val_ratio=0.1,
+                                                    test_ratio=0.1,
+                                                    batch_size=config.Training.batch_size,
+                                                    num_samples=10)
+    
     # Update the dataloaders
     train_loader = dataset.train_loader
     val_loader = dataset.val_loader
     test_loader = dataset.test_loader
+
+    # Initialize the model
+    model = PDEDiT3D_B(
+        channel_size=config.Model.channel_size,
+        channel_size_out=config.Model.channel_size_out,
+        drop_class_labels=config.Model.drop_class_labels,
+        partition_size=config.Model.partition_size,
+        mending=False
+    )
+    model = model.to(config.device)
     
     # Load the pre-trained autoencoder
     #model = VQVAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
@@ -73,9 +146,6 @@ def train_flow_matching(config, config_ae):
     ae.eval()
     for param in ae.parameters():
         param.requires_grad = False
-    # Initialize the model
-    model = Model_base(config)
-    model = model.to(config.device)
 
     # Convert learning_rate and divergence_loss_weight to float if they are strings
     if isinstance(config.Training.learning_rate, str):
@@ -113,11 +183,9 @@ def train_flow_matching(config, config_ae):
 
         # Get the next batch from the train_loader
         batch_idx = 0
-        for batch_Y in train_loader:
+        for batch_X, batch_Y in train_loader:
             batch_idx += 1
             #print(f"Batch {batch_idx}/{len(train_loader)}")
-            
-            batch_X, samples_ids = utils.interpolate_dataset(batch_Y, config.Data.perc / 100)
 
             # Ensure all elements in the batch are tensors
             x1 = torch.tensor(batch_Y) if isinstance(batch_Y, np.ndarray) else batch_Y
@@ -151,8 +219,7 @@ def train_flow_matching(config, config_ae):
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
-            for batch_Y in val_loader:
-                batch_X, samples_ids = utils.interpolate_dataset(batch_Y, config.Data.perc / 100)
+            for batch_X, batch_Y in val_loader:
                 x1 = torch.tensor(batch_Y) if isinstance(batch_Y, np.ndarray) else batch_Y
                 x0 = torch.tensor(batch_X) if isinstance(batch_X, np.ndarray) else batch_X
                 
@@ -187,7 +254,7 @@ def train_flow_matching(config, config_ae):
             param_group['lr'] = new_lr
 
         # Save checkpoint every 10 epochs
-        if (epoch + 1) % 10 == 0:
+        if (epoch + 1) % 100 == 0:
             checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{mse_loss:.4f}_{val_loss:.4f}.pth")
             torch.save(model.state_dict(), checkpoint_path)
             print(f"Saved checkpoint: {checkpoint_path}")

@@ -24,11 +24,11 @@ Model:
 Training:
   method: "std"
   epochs: 1000
-  batch_size: 2
+  batch_size: 4
   learning_rate: 5e-4
   divergence_loss_weight: 1e-1
   sigma_min: 0.0
-  gamma: 0.99
+  gamma: 0.995
   last_lr: 1e-5
 
-device: "cpu"
+device: "cuda:3"

@@ -13,8 +13,8 @@ Model:
   hidden_size: 256
   depth: 3
   num_res_block: 2
-  res_size: 8
-  z_dim: 32
+  res_size: 32
+  z_dim: 16
   #ae_path: "runs/029/epoch_500_1.1170_1.7672.pth"
   #ae_path: "runs/107/epoch_100_13.4575_14.1683.pth"
   ae_path: "runs/118/epoch_100_31.9642_32.2917.pth"
@@ -22,12 +22,12 @@ Model:
 
 Training:
   method: "std"
-  epochs: 100
-  batch_size: 5
+  epochs: 1000
+  batch_size: 4
   learning_rate: 1e-3
   divergence_loss_weight: 1e-3
-  gamma: 0.98
-  last_lr: 1e-4
+  gamma: 0.995
+  last_lr: 1e-5
   sigma_min: 0.01
 
 device: "cuda:2"

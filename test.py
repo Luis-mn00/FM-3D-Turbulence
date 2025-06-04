@@ -6,6 +6,8 @@ import numpy as np
 import os
 from pbdl.loader import Dataloader
 import math
+from torchfsm.plot import plot_3D_field
+import matplotlib.pyplot as plt
 
 from torchfsm.operator import Div
 from torchfsm.mesh import MeshGrid
@@ -151,7 +153,7 @@ A = raw_data[0].unsqueeze(0)
 B = raw_data[1].unsqueeze(0)
 dist = utils.LSiM_distance_3D(A, B)
 print(dist)
-"""
+
 
 mesh_grid=MeshGrid([(0, 2*torch.pi, 128),(0, 2*torch.pi, 128), (0, 2*torch.pi, 128)])
 x,y,z=mesh_grid.bc_mesh_grid()
@@ -165,6 +167,7 @@ field = torch.stack([x, y, z], dim=0).unsqueeze(0)
 print(field.shape)
 
 div=Div()
+print(field.shape)
 div_u=div(field,mesh=mesh_grid)
 utils.plot_slice(div_u, 0, 0, int(128/2), name="residual_fsm")
 
@@ -174,3 +177,44 @@ utils.plot_slice(div_fdm, 0, 0, int(128/2), name="residual_fdm")
 
 print(f"||div_u|| (Div operator): {torch.sqrt(torch.mean(div_u ** 2)).item():.8e}")
 print(f"||div_fdm|| (FD method): {torch.sqrt(torch.mean(div_fdm ** 2)).item():.8e}")
+"""
+
+dataset_original = torch.load(f'data/data_spectral_128.pt', weights_only=False)
+if isinstance(dataset_original, np.ndarray):
+    dataset_original = torch.from_numpy(dataset_original)
+
+vx_original = dataset_original[0, 0, :, :, :]
+vy_original = dataset_original[0, 1, :, :, :]
+vz_original = dataset_original[0, 2, :, :, :]
+print(vx_original.shape)
+
+fig, ax = plt.subplots(figsize=(8, 8))
+plot_3D_field(ax=ax, data=vx_original, cmap="PiYG")
+plt.savefig("generated_plots/vx_original.png")
+fig, ax = plt.subplots(figsize=(8, 8))
+plot_3D_field(ax=ax, data=vy_original, cmap="PiYG")
+plt.savefig("generated_plots/vy_original.png")
+fig, ax = plt.subplots(figsize=(8, 8))
+plot_3D_field(ax=ax, data=vz_original, cmap="PiYG")
+plt.savefig("generated_plots/vz_original.png")
+
+dataset_optim = torch.load(f'data/data_spectral_128_mindiv.pt', weights_only=False)
+if isinstance(dataset_original, np.ndarray):
+    dataset_optim = torch.from_numpy(dataset_optim)
+    
+utils.plot_slice(dataset_optim.cpu(), 0, 0, int(128/2), name="sample_optim")
+    
+vx_optim = dataset_optim[0, 0, :, :, :]
+vy_optim = dataset_optim[0, 1, :, :, :]
+vz_optim = dataset_optim[0, 2, :, :, :]
+print(vx_optim.shape)
+
+fig, ax = plt.subplots(figsize=(8, 8))
+plot_3D_field(ax=ax, data=vx_optim, cmap="PiYG")
+plt.savefig("generated_plots/vx_optim.png")
+fig, ax = plt.subplots(figsize=(8, 8))
+plot_3D_field(ax=ax, data=vy_optim, cmap="PiYG")
+plt.savefig("generated_plots/vy_optim.png")
+fig, ax = plt.subplots(figsize=(8, 8))
+plot_3D_field(ax=ax, data=vz_optim, cmap="PiYG")
+plt.savefig("generated_plots/vz_optim.png")

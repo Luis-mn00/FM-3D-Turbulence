@@ -11,6 +11,9 @@ from functools import partial
 import math
 import torch.nn as nn
 from LSIM_3D.src.volsim.distance_model import *
+import vedo
+from torchfsm.operator import Div
+from torchfsm.mesh import MeshGrid
 
 def dict2namespace(config):
     namespace = argparse.Namespace()
@@ -105,6 +108,8 @@ def plot_2d_comparison(low_res, high_res, gt, filename):
 
 def compute_divergence(velocity, h):
     assert velocity.shape[1] == 3, "Velocity must have 3 channels (vx, vy, vz)"
+    
+    """
     # Pad for central differences (replicate boundary)
     def central_diff(f, dim):
         # f: (batch, Nx, Ny, Nz)
@@ -128,6 +133,12 @@ def compute_divergence(velocity, h):
     dvz_dz = central_diff(vz, 2)
 
     divergence = dvx_dx + dvy_dy + dvz_dz
+    """
+    
+    mesh_grid=MeshGrid([(0, 2*torch.pi, 128),(0, 2*torch.pi, 128), (0, 2*torch.pi, 128)])
+    div=Div()
+    divergence = div(velocity, mesh=mesh_grid)
+    
     return divergence
 
 def upsample(data_lr, factor=2):
@@ -186,7 +197,7 @@ def interpolate_dataset(dataset, perc, method="nearest"):
     sampled_ids = np.zeros((n_samples, n_points), dtype=np.int32)
 
     for i in range(n_samples):
-        #print(f"sample {i+1}/{n_samples}")
+        print(f"sample {i+1}/{n_samples}")
         sampled_ids[i] = np.array(random.sample(range(np.prod(dims)), n_points))
         for c in range(n_channels):
             X_vals[i, c] = interpolate_points(X_vals[i, c], perc=perc, ids=sampled_ids[i], method=method)
@@ -450,3 +461,117 @@ def physics(A_model, A_target):
 def weighted_mse_loss(input, target, weight=(2. * torch.ones(3, 3)).fill_diagonal_(1)):
     loss_ = nn.functional.mse_loss(input, target, reduction='none')
     return sum([(weight[i, j] * loss_[:, i, j]).mean() for i in range(3) for j in range(3)])
+
+def visualize_3d_cloud_volume(
+    volume_data: torch.Tensor | np.ndarray,
+    title: str = "3D Cloud Volume Rendering",
+    bg_color: str = 'black',
+    scalars_min: float = None,
+    scalars_max: float = None
+):
+    """
+    Visualizes a 3D scalar volumetric field as a cloud-like volume rendering
+    using vedo. The color and density of the cloud indicate the data values.
+
+    Args:
+        volume_data (torch.Tensor or np.ndarray):
+            The 3D scalar field data. Expected shape (D, H, W) or (1, D, H, W).
+            If a PyTorch tensor, it will be moved to CPU and converted to NumPy.
+        title (str): Title for the visualization window.
+        bg_color (str): Background color of the plot ('black', 'white', etc.).
+        scalars_min (float, optional): Optional minimum value for mapping data
+            to the transfer function. If None, uses data_np.min().
+        scalars_max (float, optional): Optional maximum value for mapping data
+            to the transfer function. If None, uses data_np.max().
+    """
+    # Ensure vedo is installed
+    try:
+        import vedo
+    except ImportError:
+        print("Error: vedo library not found. Please install it using: pip install vedo")
+        return
+
+    # Convert input to a 3D NumPy array (D, H, W)
+    if isinstance(volume_data, torch.Tensor):
+        # Remove batch dimension if present and move to CPU, then convert to NumPy
+        if volume_data.ndim == 4 and volume_data.shape[0] == 1:
+            data_np = volume_data.squeeze(0).detach().cpu().numpy()
+        elif volume_data.ndim == 3:
+            data_np = volume_data.detach().cpu().numpy()
+        else:
+            raise ValueError(f"Input tensor has unsupported shape: {volume_data.shape}. Expected (D, H, W) or (1, D, H, W).")
+    elif isinstance(volume_data, np.ndarray):
+        if volume_data.ndim == 4 and volume_data.shape[0] == 1:
+            data_np = volume_data.squeeze(0)
+        elif volume_data.ndim == 3:
+            data_np = volume_data
+        else:
+            raise ValueError(f"Input numpy array has unsupported shape: {volume_data.shape}. Expected (D, H, W) or (1, D, H, W).")
+    else:
+        raise TypeError("Input data must be a torch.Tensor or numpy.ndarray.")
+
+    # Determine data range for normalization
+    data_min = scalars_min if scalars_min is not None else data_np.min()
+    data_max = scalars_max if scalars_max is not None else data_np.max()
+
+    if data_max == data_min:
+        print("Warning: All values in the volume data are identical. Cannot create meaningful visualization.")
+        return
+
+    # Normalize data to [0, 1] for consistent transfer function mapping
+    # This step is crucial if your data's actual range can vary significantly.
+    normalized_data_np = (data_np - data_min) / (data_max - data_min)
+
+    # Create a vedo Volume object
+    vol = vedo.Volume(normalized_data_np)
+
+    # Define the custom transfer function for "cloud-like" rendering
+    # These scalar values correspond to the normalized data range [0, 1]
+    scalars = [0.0, 0.05, 0.15, 0.4, 0.7, 1.0]
+
+    # Opacities (0.0 = fully transparent, 1.0 = fully opaque)
+    # Creates the cloud effect: fuzzy at edges, denser in core
+    opacities = [0.0, 0.005, 0.05, 0.2, 0.5, 0.8]
+
+    # Colors (define the colormap from cool to hot)
+    colors = [
+        'lightskyblue', # Lowest values (most transparent blue)
+        'cyan',
+        'lime',
+        'yellow',
+        'orange',
+        'red'           # Highest values (most opaque red)
+    ]
+
+    # Build the Lookup Table (LUT)
+    transfer_function = vedo.build_lut(scalars, opacities, colors)
+
+    # Apply the transfer function to the volume
+    vol.cmap(transfer_function)
+    vol.mode('composite') # Ensure composite rendering
+
+    # Set up the plotter and visualize
+    plotter = vedo.Plotter(size=(900, 900), bg=bg_color)
+
+    # Add scalar bar for reference
+    # Use the original data range for the scalar bar labels
+    vol.add_scalarbar(f"Field Value ({data_min:.2f} to {data_max:.2f})", c='white' if bg_color == 'black' else 'black')
+
+    # Add lighting for better depth perception
+    vol.lighting('plastic')
+
+    # Add the volume to the plotter
+    plotter.add(vol)
+
+    # Set an initial camera position. You can adjust these values
+    # The default view often works well, but this provides a consistent starting point.
+    center = np.array(data_np.shape) / 2
+    plotter.camera.SetPosition([center[0]*2.5, center[1]*2.5, center[2]*2.5]) # View from outside
+    plotter.camera.SetFocalPoint(center) # Look at the center of the volume
+    plotter.camera.SetViewUp([0, 1, 0]) # Keep Y-axis up
+
+    # Show the plot
+    plotter.show(
+        title,
+        interactor_style=1, # 1 for TrackballCamera, allows easy navigation
+    )

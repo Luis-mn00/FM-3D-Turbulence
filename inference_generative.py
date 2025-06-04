@@ -111,7 +111,7 @@ def residual_of_generated(samples, samples_gt, config):
         # Ensure all tensors are on the same device
         sample = samples[i].to(config.device)
         res, = utils.compute_divergence(sample[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-        rmse_loss[i] = torch.sqrt(torch.mean(res**2))
+        rmse_loss[i] = torch.mean(torch.abs(res**2))
         #rmse_loss[i] = torch.sqrt(torch.sum(res**2))
     
     test_residuals = []
@@ -119,7 +119,7 @@ def residual_of_generated(samples, samples_gt, config):
         sample_gt = samples_gt[i].to(config.device)
         sample_gt = sample_gt.unsqueeze(0)
         res_gt, = utils.compute_divergence(sample_gt[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-        test_residuals.append(torch.sqrt(torch.mean(res_gt**2)))
+        test_residuals.append(torch.mean(torch.abs(res_gt**2)))
         
     print(f"L2 residual: {np.mean(rmse_loss):.4f} +/- {np.std(rmse_loss):.4f}") 
     # Ensure test_residuals is a numpy array on CPU

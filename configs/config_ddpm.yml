@@ -19,9 +19,9 @@ Training:
   method: "std"
   epochs: 1000
   batch_size: 4
-  learning_rate: 1e-4
+  learning_rate: 5e-4
   ddpm_loss_weight: 1e-3
-  gamma: 0.98
+  gamma: 0.995
   last_lr: 1e-5
 
 Diffusion:
@@ -31,4 +31,4 @@ Diffusion:
   beta_end: 0.02
   mask_schedule_sig: 3
 
-device: "cpu"
+device: "cuda:3"

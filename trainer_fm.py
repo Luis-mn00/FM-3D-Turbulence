@@ -44,7 +44,7 @@ def fm_PINN_step(model, xt, t, target, optimizer, config):
 
     # Compute the divergence-free loss
     divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-    divergence_loss = torch.sqrt(torch.mean(divergence ** 2))
+    divergence_loss = torch.mean(torch.abs(divergence))
     #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
 
     # Combine the flow matching loss and the divergence-free loss
@@ -67,7 +67,7 @@ def fm_PINN_dyn_step(model, xt, t, target, optimizer, config):
 
     # Compute the divergence-free loss
     divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-    divergence_loss = torch.sqrt(torch.mean(divergence ** 2))
+    divergence_loss = torch.mean(torch.abs(divergence))
     #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
 
     # Combine the flow matching loss and the divergence-free loss
@@ -91,7 +91,7 @@ def fm_ConFIG_step(model, xt, t, target, optimizer, config, operator):
 
     # Compute the divergence-free loss
     divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-    divergence_loss = torch.sqrt(torch.mean(divergence ** 2))
+    divergence_loss = torch.mean(torch.abs(divergence))
     #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
     
     # ConFIG
@@ -129,7 +129,7 @@ def train_flow_matching(config):
     test_loader = dataset.test_loader
 
     # Initialize the model
-    model = PDEDiT3D_L(
+    model = PDEDiT3D_B(
         channel_size=config.Model.channel_size,
         channel_size_out=config.Model.channel_size_out,
         drop_class_labels=config.Model.drop_class_labels,
@@ -252,8 +252,8 @@ def train_flow_matching(config):
             new_lr = max(current_lr * config.Training.gamma, config.Training.last_lr)
             param_group['lr'] = new_lr
 
-        # Save checkpoint every 10 epochs
-        if (epoch + 1) % 10 == 0:
+        # Save checkpoint every 100 epochs
+        if (epoch + 1) % 100 == 0:
             checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{mse_loss:.4f}_{val_loss:.4f}.pth")
             torch.save(model.state_dict(), checkpoint_path)
             print(f"Saved checkpoint: {checkpoint_path}")
@@ -283,9 +283,6 @@ if __name__ == "__main__":
         config = yaml.safe_load(f)
     config = utils.dict2namespace(config)
     print(config.device)
-    if torch.cuda.is_available():
-        print(f"CUDA current device: {torch.cuda.current_device()}")
-        print(f"CUDA device name: {torch.cuda.get_device_name(torch.cuda.current_device())}")
 
     # Train the model
     train_flow_matching(config)

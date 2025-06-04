@@ -17,7 +17,7 @@ from my_config_length import UniProjectionLength
 
 wandb.login(key="f4a726b2fe7929990149e82fb88da423cfa74e46")
 
-wandb.init(project="fm")
+wandb.init(project="reg")
 
 def standard_step(model, x, target, optimizer, config):
     # Forward pass
@@ -41,7 +41,7 @@ def PINN_step(model, x, target, optimizer, config):
 
     # Compute the divergence-free loss
     divergence = utils.compute_divergence(pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-    divergence_loss = torch.sqrt(torch.mean(divergence ** 2))
+    divergence_loss = torch.mean(torch.abs(divergence))
 
     # Combine the flow matching loss and the divergence-free loss
     total_loss = loss + config.Training.divergence_loss_weight * divergence_loss
@@ -61,7 +61,7 @@ def PINN_dyn_step(model, x, target, optimizer, config):
 
     # Compute the divergence-free loss
     divergence = utils.compute_divergence(pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-    divergence_loss = torch.sqrt(torch.mean(divergence ** 2))
+    divergence_loss = torch.mean(torch.abs(divergence))
 
     # Combine the flow matching loss and the divergence-free loss
     coef = loss / divergence_loss
@@ -82,7 +82,7 @@ def ConFIG_step(model, x, target, optimizer, config, operator):
 
     # Compute the divergence-free loss
     divergence = utils.compute_divergence(pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-    divergence_loss = torch.sqrt(torch.mean(divergence ** 2))
+    divergence_loss = torch.mean(torch.abs(divergence))
     
     # ConFIG
     loss_physics_unscaled = divergence_loss.clone()
@@ -227,7 +227,7 @@ def train_flow_matching(config):
             param_group['lr'] = new_lr
 
         # Save checkpoint every 10 epochs
-        if (epoch + 1) % 10 == 0:
+        if (epoch + 1) % 100 == 0:
             checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{mse_loss:.4f}_{val_loss:.4f}.pth")
             torch.save(model.state_dict(), checkpoint_path)
             print(f"Saved checkpoint: {checkpoint_path}")

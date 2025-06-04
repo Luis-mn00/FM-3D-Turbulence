@@ -88,19 +88,23 @@ def velocity_to_epsilon(v, x, t, alpha_cum_t):
     
 # DDIM sampling (using reverse diffusion with flow matching)
 def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
-    seq = range(0, t_start, t_start // reverse_steps) 
-    next_seq = [-1] + list(seq[:-1])
+    #seq = range(0, t_start, t_start // reverse_steps) 
+    #next_seq = [-1] + list(seq[:-1])
+    seq = list(range(t_start, 0, -t_start // reverse_steps))
+    next_seq = [-1] + (seq[:-1])
     n = x.size(0)
 
     for i, j in zip(reversed(seq), reversed(next_seq)):
-        t = (torch.ones(n) * i).to(x.device)
+        #t = (torch.ones(n) * i).to(x.device)
+        t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)  # Normalize time to [1, 0]
         #print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
 
         alpha_bar_t = alphas_cumprod[i] if i < len(alphas_cumprod) else alphas_cumprod[-1]
         alpha_bar_next = alphas_cumprod[j] if 0 <= j < len(alphas_cumprod) else alpha_bar_t
         
         # Predict velocity v_theta(x_t, t) using the model
-        v = model(x, 1 - t / t_start)
+        #v = model(x, 1 - t / t_start)
+        v = model(x, t)
         v = v.sample
 
         # Convert velocity to noise epsilon
@@ -143,14 +147,14 @@ def residual_of_generated(samples, samples_gt, config):
         # Ensure all tensors are on the same device
         sample = samples[i].to(config.device)
         res, = utils.compute_divergence(sample[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-        rmse_loss[i] = torch.sqrt(torch.mean(res**2))
+        rmse_loss[i] = torch.mean(torch.abs(res))
     
     test_residuals = []
     for i in range(len(samples)):
         sample_gt = samples_gt[i].to(config.device)
         sample_gt = sample_gt.unsqueeze(0)
         res_gt, = utils.compute_divergence(sample_gt[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-        test_residuals.append(torch.sqrt(torch.mean(res_gt**2)))
+        test_residuals.append(torch.mean(torch.abs(res_gt)))
         
     print(f"L2 residual: {np.mean(rmse_loss):.4f} +/- {np.std(rmse_loss):.4f}") 
     # Ensure test_residuals is a numpy array on CPU

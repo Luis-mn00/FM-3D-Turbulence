@@ -71,14 +71,14 @@ def residual_of_generated(samples, samples_gt, config):
         # Ensure all tensors are on the same device
         sample = samples[i].to(config.device)
         res, = utils.compute_divergence(sample[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-        rmse_loss[i] = torch.sqrt(torch.mean(res**2))
+        rmse_loss[i] = torch.mean(torch.abs(res))
     
     test_residuals = []
     for i in range(len(samples)):
         sample_gt = samples_gt[i].to(config.device)
         sample_gt = sample_gt.unsqueeze(0)
         res_gt, = utils.compute_divergence(sample_gt[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-        test_residuals.append(torch.sqrt(torch.mean(res_gt**2)))
+        test_residuals.append(torch.mean(torch.abs(res_gt)))
         
     print(f"L2 residual: {np.mean(rmse_loss):.4f} +/- {np.std(rmse_loss):.4f}") 
     test_residuals_np = np.array([r.cpu().item() if torch.is_tensor(r) else r for r in test_residuals])

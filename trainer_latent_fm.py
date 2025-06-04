@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import wandb
 from conflictfree.utils import get_gradient_vector
 from conflictfree.grad_operator import ConFIGOperator
+import math
 
 from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset, BigSpectralIsotropicTurbulenceDataset
 import utils
@@ -30,6 +31,81 @@ def fm_standard_step(model, xt, t, target, optimizer, config):
     optimizer.zero_grad()
     total_loss.backward()
     optimizer.step()
+    
+    return total_loss, loss
+
+def fm_PINN_step(model, xt, t, target, optimizer, config):
+    # Forward pass
+    pred = model(xt, t)
+    pred = pred.sample
+    loss = ((target - pred) ** 2).mean()
+    
+    x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
+
+    # Compute the divergence-free loss
+    divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+    divergence_loss = torch.mean(torch.abs(divergence))
+    #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
+
+    # Combine the flow matching loss and the divergence-free loss
+    total_loss = loss + config.Training.divergence_loss_weight * divergence_loss
+    
+    # Backward pass and optimization
+    optimizer.zero_grad()
+    total_loss.backward()
+    optimizer.step()
+    
+    return total_loss, loss
+
+def fm_PINN_dyn_step(model, xt, t, target, optimizer, config):
+    # Forward pass
+    pred = model(xt, t)
+    pred = pred.sample
+    loss = ((target - pred) ** 2).mean()
+    
+    x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
+
+    # Compute the divergence-free loss
+    divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+    divergence_loss = torch.mean(torch.abs(divergence))
+    #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
+
+    # Combine the flow matching loss and the divergence-free loss
+    coef = loss / divergence_loss
+    total_loss = loss + coef * divergence_loss
+    
+    # Backward pass and optimization
+    optimizer.zero_grad()
+    total_loss.backward()
+    optimizer.step()
+    
+    return total_loss, loss
+
+def fm_ConFIG_step(model, xt, t, target, optimizer, config, operator):
+    # Forward pass
+    pred = model(xt, t)
+    pred = pred.sample
+    loss = ((target - pred) ** 2).mean()
+    
+    x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
+
+    # Compute the divergence-free loss
+    divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+    divergence_loss = torch.mean(torch.abs(divergence))
+    #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
+    
+    # ConFIG
+    loss_physics_unscaled = divergence_loss.clone()
+    loss.backward(retain_graph=True)
+    grads_1 = get_gradient_vector(model, none_grad_mode="skip")
+    optimizer.zero_grad()
+    divergence_loss.backward()
+    grads_2 = get_gradient_vector(model, none_grad_mode="skip")
+
+    operator.update_gradient(model, [grads_1, grads_2])
+    optimizer.step()
+    
+    total_loss = loss + config.Training.divergence_loss_weight * divergence_loss
     
     return total_loss, loss
 
@@ -183,7 +259,7 @@ def train_flow_matching(config, config_ae):
             param_group['lr'] = new_lr
 
         # Save checkpoint every 10 epochs
-        if (epoch + 1) % 10 == 0:
+        if (epoch + 1) % 100 == 0:
             checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{mse_loss:.4f}_{val_loss:.4f}.pth")
             torch.save(model.state_dict(), checkpoint_path)
             print(f"Saved checkpoint: {checkpoint_path}")

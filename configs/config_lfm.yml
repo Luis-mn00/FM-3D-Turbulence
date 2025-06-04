@@ -1,6 +1,6 @@
 Data:
   dt: 0.1
-  grid_size: 16
+  grid_size: 32
   seed: 1234
   crop: "crop"
   field: "vorticity"
@@ -9,8 +9,8 @@ Data:
   size: 500
 
 Model:
-  channel_size: 32  # Number of input channels
-  channel_size_out: 32  # Number of output channels
+  channel_size: 16  # Number of input channels
+  channel_size_out: 16  # Number of output channels
   partition_size: [1, 1, 1]  # Partition size for region partitioning
   drop_class_labels: True  # Whether to drop class labels
   #save_path: "runs/068/epoch_10_2.4558_2.4804.pth"
@@ -20,12 +20,12 @@ Model:
 
 Training:
   method: "std"
-  epochs: 20
-  batch_size: 5
-  learning_rate: 1e-4
+  epochs: 1000
+  batch_size: 4
+  learning_rate: 5e-4
   divergence_loss_weight: 1e-1
-  sigma_min: 0.01
-  gamma: 0.98
+  sigma_min: 0.0
+  gamma: 0.995
   last_lr: 1e-5
 
 device: "cuda:2"

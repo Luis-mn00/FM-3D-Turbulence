@@ -142,18 +142,16 @@ def train_ae(config):
             param_group['lr'] = new_lr
 
         # Save checkpoint every 10 epochs
-        #if (epoch + 1) % 10 == 0:
-        #    checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{epoch_BCE_loss:.4f}_{val_loss:.4f}.pth")
-        #    torch.save(model.state_dict(), checkpoint_path)
-        #    print(f"Saved checkpoint: {checkpoint_path}")
-
+        if (epoch + 1) % 100 == 0:
+            checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{total_loss:.4f}_{val_loss:.4f}.pth")
+            torch.save(model.state_dict(), checkpoint_path)
+            print(f"Saved checkpoint: {checkpoint_path}")
+            
         # Log the epoch loss and validation loss
         print(f"Epoch [{epoch + 1}/{config.Training.epochs}], Loss: {total_loss:.4f}, Validation Loss: {val_loss:.4f}")
+
         
     wandb.finish()
-    
-    checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{total_loss:.4f}_{val_loss:.4f}.pth")
-    torch.save(model.state_dict(), checkpoint_path)
 
     # Plot losses after training
     plt.figure()

@@ -18,7 +18,7 @@ from diffusion import Diffusion
 
 wandb.login(key="f4a726b2fe7929990149e82fb88da423cfa74e46")
 
-wandb.init(project="fm")
+wandb.init(project="ddpm")
 
 def ddpm_standard_step(model, diffusion, y, optimizer, config):
     batch_size = y.shape[0]
@@ -38,7 +38,7 @@ def ddpm_standard_step(model, diffusion, y, optimizer, config):
         a_b = a_b.view(-1, 1, 1, 1, 1)
         x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
         eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-        eq_res_m = torch.sqrt(torch.mean(eq_residual ** 2))
+        eq_res_m = torch.mean(torch.abs(eq_residual))
 
     return mse_loss, eq_res_m
 
@@ -57,7 +57,7 @@ def ddpm_PINN_step(model, diffusion, y, optimizer, config):
         a_b = a_b.view(-1, 1, 1, 1, 1)
         x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
         eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-        eq_res_m = torch.sqrt(torch.mean(eq_residual ** 2))
+        eq_res_m = torch.mean(torch.abs(eq_residual))
         
     total_loss = mse_loss + config.Training.ddpm_loss_weight * eq_res_m
     total_loss.backward()
@@ -80,7 +80,7 @@ def ddpm_PINN_dyn_step(model, diffusion, y, optimizer, config):
         a_b = a_b.view(-1, 1, 1, 1, 1)
         x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
         eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-        eq_res_m = torch.sqrt(torch.mean(eq_residual ** 2))
+        eq_res_m = torch.mean(torch.abs(eq_residual))
         
     coef = mse_loss / eq_res_m
         
@@ -105,7 +105,7 @@ def ddpm_ConFIG_step(model, diffusion, y, optimizer, config, operator):
         a_b = a_b.view(-1, 1, 1, 1, 1)
         x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
         eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-        eq_res_m = torch.sqrt(torch.mean(eq_residual ** 2))
+        eq_res_m = torch.mean(torch.abs(eq_residual))
     
     # ConFIG
     loss_physics_unscaled = eq_res_m.clone()
@@ -244,7 +244,7 @@ def train_ddpm(config):
             param_group['lr'] = new_lr
 
         # Save checkpoint every 10 epochs
-        if (epoch + 1) % 10 == 0:
+        if (epoch + 1) % 100 == 0:
             checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{mse_loss:.4f}_{val_loss:.4f}.pth")
             torch.save(model.state_dict(), checkpoint_path)
             print(f"Saved checkpoint: {checkpoint_path}")
