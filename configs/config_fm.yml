@@ -1,25 +1,15 @@
 Data:
-  dt: 0.1
   grid_size: 128
-  seed: 1234
-  crop: "crop"
-  field: "vorticity"
   norm: true
-  shuffle: true
   size: 500
 
 Model:
-  channel_size: 3  # Number of input channels
-  channel_size_out: 3  # Number of output channels
-  partition_size: [1, 1, 1]  # Partition size for region partitioning
-  drop_class_labels: True  # Whether to drop class labels
-  #save_path: "runs/013/epoch_240_0.2047_0.1725.pth"
-  #save_path: "runs/077/epoch_60_0.2951_0.2749.pth"
-  #save_path: "runs/089/epoch_60_0.4262_0.3600.pth"
-  #save_path: "runs/092/epoch_190_0.2517_0.2328.pth"
-  save_path: "runs/094/epoch_360_0.2335_0.2140.pth"
-  #save_path: "runs/096/epoch_250_0.3103_0.2615.pth"
-  #save_path: "runs/097/epoch_110_0.2245_0.1998.pth"
+  channel_size: 3 
+  channel_size_out: 3  
+  partition_size: [1, 1, 1]  
+  drop_class_labels: True  
+  save_path: "runs/094/epoch_360_0.2335_0.2140.pth" # std
+
 
 Training:
   method: "std"

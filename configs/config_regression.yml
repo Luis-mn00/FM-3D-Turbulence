@@ -1,20 +1,14 @@
 Data:
-  dt: 0.1
-  perc: 5
   grid_size: 128
-  seed: 1234
-  crop: "crop"
-  field: "vorticity"
   norm: true
-  shuffle: true
   size: 500
 
 Model:
-  channel_size: 3  # Number of input channels
-  channel_size_out: 3  # Number of output channels
-  partition_size: [1, 1, 1]  # Partition size for region partitioning
-  drop_class_labels: True  # Whether to drop class labels
-  save_path: "runs/135/epoch_440_0.0268_0.0403.pth"
+  channel_size: 3  
+  channel_size_out: 3  
+  partition_size: [1, 1, 1]  
+  drop_class_labels: True  
+  save_path: "runs/135/epoch_440_0.0268_0.0403.pth" # std
 
 Training:
   method: "std"

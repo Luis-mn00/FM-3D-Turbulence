@@ -1,11 +1,6 @@
 Data:
-  dt: 0.1
   grid_size: 128
-  seed: 1234
-  crop: "crop"
-  field: "vorticity"
   norm: true
-  shuffle: true
   size: 500
 
 Model:
@@ -15,19 +10,14 @@ Model:
   num_res_block: 2
   res_size: 32
   z_dim: 16
-  #ae_path: "runs/029/epoch_500_1.1170_1.7672.pth"
-  #ae_path: "runs/107/epoch_100_13.4575_14.1683.pth"
   ae_path: "runs/118/epoch_100_31.9642_32.2917.pth"
   
 
 Training:
-  method: "std"
   epochs: 1000
   batch_size: 4
   learning_rate: 1e-3
-  divergence_loss_weight: 1e-3
   gamma: 0.995
   last_lr: 1e-5
-  sigma_min: 0.01
 
 device: "cuda:2"
