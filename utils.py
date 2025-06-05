@@ -14,6 +14,7 @@ from LSIM_3D.src.volsim.distance_model import *
 import vedo
 from torchfsm.operator import Div
 from torchfsm.mesh import MeshGrid
+from scipy.ndimage import zoom
 
 def dict2namespace(config):
     namespace = argparse.Namespace()
@@ -136,6 +137,7 @@ def compute_divergence(velocity, h):
     """
     
     mesh_grid=MeshGrid([(0, 2*torch.pi, 128),(0, 2*torch.pi, 128), (0, 2*torch.pi, 128)])
+    velocity = velocity.to(mesh_grid.device)
     div=Div()
     divergence = div(velocity, mesh=mesh_grid)
     
@@ -202,6 +204,37 @@ def interpolate_dataset(dataset, perc, method="nearest"):
         for c in range(n_channels):
             X_vals[i, c] = interpolate_points(X_vals[i, c], perc=perc, ids=sampled_ids[i], method=method)
     return X_vals, sampled_ids
+
+
+def downscale_data(high_res, scale_factor):
+    channels = len(high_res.shape) == 5  # (N, C, Lx, Ly, Lz)
+
+    if channels:
+        N, C, Lx, Ly, Lz = high_res.shape
+        high_res = high_res.reshape(N * C, Lx, Ly, Lz)
+    else:
+        N, Lx, Ly, Lz = high_res.shape
+
+    _high_res = high_res.numpy() if isinstance(high_res, torch.Tensor) else high_res
+
+    Lx_small = int(Lx / scale_factor)
+    Ly_small = int(Ly / scale_factor)
+    Lz_small = int(Lz / scale_factor)
+    NN = _high_res.shape[0]
+
+    X_small = np.zeros((NN, Lx_small, Ly_small, Lz_small), dtype=np.float32)
+    X_upscaled = np.zeros((NN, Lx, Ly, Lz), dtype=np.float32)
+
+    for i in range(NN):
+        # Downscale
+        X_small[i] = zoom(_high_res[i], zoom=(Lx_small / Lx, Ly_small / Ly, Lz_small / Lz), order=3)
+        # Upscale
+        X_upscaled[i] = zoom(X_small[i], zoom=(Lx / Lx_small, Ly / Ly_small, Lz / Lz_small), order=3)
+
+    if channels:
+        X_upscaled = X_upscaled.reshape(N, C, Lx, Ly, Lz)
+
+    return torch.Tensor(X_upscaled)
 
 
 #lsim_model = DistanceModel(baseType="lsim", isTrain=False, useGPU=False)

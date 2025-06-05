@@ -16,13 +16,12 @@ class BigSpectralIsotropicTurbulenceDataset:
         self.batch_size = batch_size
         self.num_samples = num_samples
         
-        self.data = torch.load(f'data/data_spectral_{grid_size}_mindiv.pt', weights_only=False)
+        self.data = torch.load(f'data/data_spectral_{grid_size}_mindiv.pt', weights_only=False, map_location='cpu')
         if isinstance(self.data, np.ndarray):
             self.data = torch.from_numpy(self.data)
         self.N_time, self.N_channels, self.Nx, self.Ny, self.Nz = self.data.shape
         print(f"N_time: {self.N_time}, N_channels: {self.N_channels}, Nx: {self.Nx}, Ny: {self.Ny}, Nz: {self.Nz}")
 
-        self.data = self.data.to('cpu') 
         self.velocity = self.data[:, :3, :, :, :]
         
         mean_data, std_data = utils.compute_statistics(self.data)

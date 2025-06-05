@@ -18,7 +18,7 @@ from src.core.models.box.pdedit import PDEDiT3D_S, PDEDiT3D_B, PDEDiT3D_L
 
 wandb.login(key="f4a726b2fe7929990149e82fb88da423cfa74e46")
 
-wandb.init(project="Latent fm DP")
+wandb.init(project="Latent fm DP v")
 
 def fm_standard_step(model, xt, t, target, optimizer, config):
     # Forward pass

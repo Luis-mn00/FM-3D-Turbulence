@@ -177,7 +177,7 @@ utils.plot_slice(div_fdm, 0, 0, int(128/2), name="residual_fdm")
 
 print(f"||div_u|| (Div operator): {torch.sqrt(torch.mean(div_u ** 2)).item():.8e}")
 print(f"||div_fdm|| (FD method): {torch.sqrt(torch.mean(div_fdm ** 2)).item():.8e}")
-"""
+
 
 dataset_original = torch.load(f'data/data_spectral_128.pt', weights_only=False)
 if isinstance(dataset_original, np.ndarray):
@@ -199,7 +199,7 @@ plot_3D_field(ax=ax, data=vz_original, cmap="PiYG")
 plt.savefig("generated_plots/vz_original.png")
 
 dataset_optim = torch.load(f'data/data_spectral_128_mindiv.pt', weights_only=False)
-if isinstance(dataset_original, np.ndarray):
+if isinstance(dataset_optim, np.ndarray):
     dataset_optim = torch.from_numpy(dataset_optim)
     
 utils.plot_slice(dataset_optim.cpu(), 0, 0, int(128/2), name="sample_optim")
@@ -218,3 +218,16 @@ plt.savefig("generated_plots/vy_optim.png")
 fig, ax = plt.subplots(figsize=(8, 8))
 plot_3D_field(ax=ax, data=vz_optim, cmap="PiYG")
 plt.savefig("generated_plots/vz_optim.png")
+"""
+
+dataset_optim = torch.load(f'data/data_spectral_128_mindiv.pt', weights_only=False, map_location='cpu')
+if isinstance(dataset_optim, np.ndarray):
+    dataset_optim = torch.from_numpy(dataset_optim)
+    
+velocity = dataset_optim[0, :, :, :, :].unsqueeze(0)
+print(velocity.shape)
+utils.plot_slice(velocity, 0, 0, int(128/2), "grid_before")
+
+velocity_lr = utils.downscale_data(velocity, 4)
+print(velocity_lr.shape)
+utils.plot_slice(velocity_lr, 0, 0, int(128/2), "grid_after")

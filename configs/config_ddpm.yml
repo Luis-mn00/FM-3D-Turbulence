@@ -26,4 +26,4 @@ Diffusion:
   beta_end: 0.02
   mask_schedule_sig: 3
 
-device: "cuda:3"
+device: "cuda:1"

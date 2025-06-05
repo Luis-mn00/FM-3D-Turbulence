@@ -11,20 +11,11 @@ import math
 
 from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset, BigSpectralIsotropicTurbulenceDataset
 import utils
-from model_simple import Model_base
 from src.core.models.box.pdedit import PDEDiT3D_S, PDEDiT3D_B, PDEDiT3D_L
 
 # Create a folder to save plots
 plot_folder = "generated_plots"
 os.makedirs(plot_folder, exist_ok=True)
-
-# Load the trained model
-def load_model(config, model_path):
-    model = Model_base(config)
-    model.load_state_dict(torch.load(model_path, map_location=config.device))
-    model = model.to(config.device)
-    model.eval()
-    return model
 
 def fm_interp(model, x, x_lr, steps):
     xt = x
@@ -52,7 +43,7 @@ def fm_mask(model, x, x_lr, steps, mask):
         
     return xt
 
-def fm_interp_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids, perc):
+def fm_interp_sparse_experiment(config, model, nsamples, samples_x, samples_y):
     
     losses = []
     residuals = []
@@ -86,7 +77,7 @@ def fm_interp_sparse_experiment(config, model, nsamples, samples_x, samples_y, s
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     
-def fm_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids, perc):
+def fm_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1):
     
     losses = []
     residuals = []
@@ -100,14 +91,17 @@ def fm_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, sam
         y     = samples_y[i].unsqueeze(0).to(config.device)
         noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
 
-        mask = torch.zeros(config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).flatten()
-        mask[samples_ids[i]] = 1
-        mask = mask.reshape(config.Data.grid_size, config.Data.grid_size, config.Data.grid_size)
-        mask = mask.unsqueeze(0).unsqueeze(0)  # (1, 1, D, D, D)
-        mask = mask.repeat(1, config.Model.channel_size, 1, 1, 1)  # (1, C, D, D, D)
-        mask = mask.to(config.device)
-        mask_tmp = torch.rand(noise.shape, device=noise.device) < 1.0
-        mask = torch.clamp(mask + mask_tmp, max=1)
+        if samples_ids is not None:
+            mask = torch.zeros(config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).flatten()
+            mask[samples_ids[i]] = 1
+            mask = mask.reshape(config.Data.grid_size, config.Data.grid_size, config.Data.grid_size)
+            mask = mask.unsqueeze(0).unsqueeze(0)  # (1, 1, D, D, D)
+            mask = mask.repeat(1, config.Model.channel_size, 1, 1, 1)  # (1, C, D, D, D)
+            mask = mask.to(config.device)
+            mask_tmp = torch.rand(noise.shape, device=noise.device) < 1.0
+            mask = torch.clamp(mask + mask_tmp, max=1)
+        else:
+            mask = torch.rand(x.shape, device=x.device) < w_mask
 
         y_pred = fm_mask(model, noise.clone(), x.clone(), 10, mask)
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
@@ -129,7 +123,7 @@ def fm_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, sam
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     
-def fm_diff_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids, perc, w_mask=1, sig=0.044):
+def fm_diff_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044):
     
     losses = []
     residuals = []
@@ -137,18 +131,31 @@ def fm_diff_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y
     residuals_diff = []
     lsim = []
     
-    diffuse_masks = torch.zeros(len(samples_ids), config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
-    for j in range(len(samples_ids)):
-        # Use the correct number of total voxels for 3D
-        total_voxels = config.Data.grid_size ** 3
-        ids = list(samples_ids[j]) + random.sample(range(total_voxels), int(total_voxels * w_mask))
-        mask = utils.diffuse_mask(
-            ids, A=1, sig=sig,
-            Nx=config.Data.grid_size,
-            Ny=config.Data.grid_size,
-            Nz=config.Data.grid_size
-        )
-        diffuse_masks[j] = torch.tensor(mask, dtype=torch.float).unsqueeze(0).repeat(config.Model.channel_size, 1, 1, 1)
+    if samples_ids is not None:
+        diffuse_masks = torch.zeros(len(samples_ids), config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
+        for j in range(len(samples_ids)):
+            # Use the correct number of total voxels for 3D
+            total_voxels = config.Data.grid_size ** 3
+            ids = list(samples_ids[j]) + random.sample(range(total_voxels), int(total_voxels * w_mask))
+            mask = utils.diffuse_mask(
+                ids, A=1, sig=sig,
+                Nx=config.Data.grid_size,
+                Ny=config.Data.grid_size,
+                Nz=config.Data.grid_size
+            )
+            diffuse_masks[j] = torch.tensor(mask, dtype=torch.float).unsqueeze(0).repeat(config.Model.channel_size, 1, 1, 1)
+    else:
+        diffuse_masks = torch.zeros(nsamples, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
+        for i in range(nsamples):
+            total_voxels = config.Data.grid_size ** 3
+            ids = random.sample(range(total_voxels), int(total_voxels * w_mask))
+            mask = utils.diffuse_mask(
+                ids, A=1, sig=sig, 
+                Nx=config.Data.grid_size,
+                Ny=config.Data.grid_size,
+                Nz=config.Data.grid_size
+            )
+            diffuse_masks[j] = torch.tensor(mask, dtype=torch.float).unsqueeze(0).repeat(config.Model.channel_size, 1, 1, 1)
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
@@ -256,7 +263,7 @@ def ddim_mask(model, x, x_lr, t_start, reverse_steps, betas, alphas_cumprod, mas
 
     return x
 
-def ddpm_interp_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids, perc, t_start=1000, reverse_steps=20, T=1000):
+def ddpm_interp_sparse_experiment(config, model, nsamples, samples_x, samples_y, t_start=1000, reverse_steps=20, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(T)
     
     losses = []
@@ -291,7 +298,7 @@ def ddpm_interp_sparse_experiment(config, model, nsamples, samples_x, samples_y,
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     
-def ddpm_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids, perc, t_start=1000, reverse_steps=20, T=1000):
+def ddpm_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, t_start=1000, reverse_steps=20, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(T)
     
     losses = []
@@ -306,14 +313,17 @@ def ddpm_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, s
         y     = samples_y[i].unsqueeze(0).to(config.device)
         noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
 
-        mask = torch.zeros(config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).flatten()
-        mask[samples_ids[i]] = 1
-        mask = mask.reshape(config.Data.grid_size, config.Data.grid_size, config.Data.grid_size)
-        mask = mask.unsqueeze(0).unsqueeze(0)  # (1, 1, D, D, D)
-        mask = mask.repeat(1, config.Model.channel_size, 1, 1, 1)  # (1, C, D, D, D)
-        mask = mask.to(config.device)
-        mask_tmp = torch.rand(noise.shape, device=noise.device) < 1.0
-        mask = torch.clamp(mask + mask_tmp, max=1)
+        if samples_ids is not None:
+            mask = torch.zeros(config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).flatten()
+            mask[samples_ids[i]] = 1
+            mask = mask.reshape(config.Data.grid_size, config.Data.grid_size, config.Data.grid_size)
+            mask = mask.unsqueeze(0).unsqueeze(0)  # (1, 1, D, D, D)
+            mask = mask.repeat(1, config.Model.channel_size, 1, 1, 1)  # (1, C, D, D, D)
+            mask = mask.to(config.device)
+            mask_tmp = torch.rand(noise.shape, device=noise.device) < 1.0
+            mask = torch.clamp(mask + mask_tmp, max=1)
+        else:
+            mask = torch.rand(x.shape, device=x.device) < w_mask
 
         y_pred = ddim_mask(model, noise.clone(), x.clone(), t_start, reverse_steps, betas, alphas_cumprod, mask)
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
@@ -335,7 +345,7 @@ def ddpm_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, s
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     
-def ddpm_diff_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids, perc, w_mask=1, sig=0.044, t_start=1000, reverse_steps=20, T=1000):
+def ddpm_diff_mask_sparse_experiment(config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044, t_start=1000, reverse_steps=20, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(T)
     
     losses = []
@@ -344,18 +354,31 @@ def ddpm_diff_mask_sparse_experiment(config, model, nsamples, samples_x, samples
     residuals_diff = []
     lsim = []
     
-    diffuse_masks = torch.zeros(len(samples_ids), config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
-    for j in range(len(samples_ids)):
-        # Use the correct number of total voxels for 3D
-        total_voxels = config.Data.grid_size ** 3
-        ids = list(samples_ids[j]) + random.sample(range(total_voxels), int(total_voxels * w_mask))
-        mask = utils.diffuse_mask(
-            ids, A=1, sig=sig,
-            Nx=config.Data.grid_size,
-            Ny=config.Data.grid_size,
-            Nz=config.Data.grid_size
-        )
-        diffuse_masks[j] = torch.tensor(mask, dtype=torch.float).unsqueeze(0).repeat(config.Model.channel_size, 1, 1, 1)
+    if samples_ids is not None:
+        diffuse_masks = torch.zeros(len(samples_ids), config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
+        for j in range(len(samples_ids)):
+            # Use the correct number of total voxels for 3D
+            total_voxels = config.Data.grid_size ** 3
+            ids = list(samples_ids[j]) + random.sample(range(total_voxels), int(total_voxels * w_mask))
+            mask = utils.diffuse_mask(
+                ids, A=1, sig=sig,
+                Nx=config.Data.grid_size,
+                Ny=config.Data.grid_size,
+                Nz=config.Data.grid_size
+            )
+            diffuse_masks[j] = torch.tensor(mask, dtype=torch.float).unsqueeze(0).repeat(config.Model.channel_size, 1, 1, 1)
+    else:
+        diffuse_masks = torch.zeros(nsamples, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
+        for i in range(nsamples):
+            total_voxels = config.Data.grid_size ** 3
+            ids = random.sample(range(total_voxels), int(total_voxels * w_mask))
+            mask = utils.diffuse_mask(
+                ids, A=1, sig=sig, 
+                Nx=config.Data.grid_size,
+                Ny=config.Data.grid_size,
+                Nz=config.Data.grid_size
+            )
+            diffuse_masks[j] = torch.tensor(mask, dtype=torch.float).unsqueeze(0).repeat(config.Model.channel_size, 1, 1, 1)
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
@@ -408,6 +431,8 @@ if __name__ == "__main__":
     samples_y = dataset.test_dataset
     perc = 5
     samples_x, samples_ids = utils.interpolate_dataset(samples_y, perc/100)
+    #samples_x = utils.downscale_data(samples_y, 4)
+    #samples_ids = None
 
     # Load the trained model
     print("Loading model...")
@@ -422,9 +447,9 @@ if __name__ == "__main__":
     model = model.to(config.device)
     model.eval()
     
-    #fm_interp_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc=perc)
-    #fm_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)
-    #fm_diff_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)
-    ddpm_interp_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)
-    ddpm_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)
-    ddpm_diff_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids, perc)
+    fm_interp_sparse_experiment(config, model, num_samples, samples_x, samples_y)
+    fm_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids)
+    fm_diff_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids)
+    ddpm_interp_sparse_experiment(config, model, num_samples, samples_x, samples_y)
+    ddpm_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids)
+    ddpm_diff_mask_sparse_experiment(config, model, num_samples, samples_x, samples_y, samples_ids)
