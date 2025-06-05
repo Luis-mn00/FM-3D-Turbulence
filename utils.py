@@ -226,6 +226,7 @@ def downscale_data(high_res, scale_factor):
     X_upscaled = np.zeros((NN, Lx, Ly, Lz), dtype=np.float32)
 
     for i in range(NN):
+        print(f"sample {i}/{NN}")
         # Downscale
         X_small[i] = zoom(_high_res[i], zoom=(Lx_small / Lx, Ly_small / Ly, Lz_small / Lz), order=3)
         # Upscale

@@ -67,7 +67,8 @@ class SupervisedSpectralTurbulenceDataset:
         self.num_samples = num_samples
 
         # Load X (inputs) and Y (ground truth outputs)
-        self.X = torch.load(f'data/data_spectral_{grid_size}_mindiv_5.pt', weights_only=False) 
+        self.X = torch.load(f'data/data_spectral_{grid_size}_mindiv_5.pt', weights_only=False)
+        #self.X = torch.load(f'data/data_spectral_{grid_size}_mindiv_down4.pt', weights_only=False) 
         self.Y = torch.load(f'data/data_spectral_{grid_size}_mindiv.pt', weights_only=False)
 
         if isinstance(self.X, np.ndarray):
