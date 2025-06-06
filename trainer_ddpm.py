@@ -20,7 +20,7 @@ wandb.login(key="f4a726b2fe7929990149e82fb88da423cfa74e46")
 
 wandb.init(project="ddpm")
 
-def ddpm_standard_step(model, diffusion, y, optimizer, config):
+def ddpm_standard_step(dataset, model, diffusion, y, optimizer, config):
     batch_size = y.shape[0]
     t = torch.randint(0, diffusion.num_timesteps, size=(batch_size,), device=y.device)
 
@@ -37,12 +37,12 @@ def ddpm_standard_step(model, diffusion, y, optimizer, config):
         a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
         a_b = a_b.view(-1, 1, 1, 1, 1)
         x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
-        eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+        eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
         eq_res_m = torch.mean(torch.abs(eq_residual))
 
     return mse_loss, eq_res_m
 
-def ddpm_PINN_step(model, diffusion, y, optimizer, config):
+def ddpm_PINN_step(dataset, model, diffusion, y, optimizer, config):
     batch_size = y.shape[0]
     t = torch.randint(0, diffusion.num_timesteps, size=(batch_size,), device=y.device)
 
@@ -56,7 +56,7 @@ def ddpm_PINN_step(model, diffusion, y, optimizer, config):
         a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
         a_b = a_b.view(-1, 1, 1, 1, 1)
         x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
-        eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+        eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
         eq_res_m = torch.mean(torch.abs(eq_residual))
         
     total_loss = mse_loss + config.Training.ddpm_loss_weight * eq_res_m
@@ -65,7 +65,7 @@ def ddpm_PINN_step(model, diffusion, y, optimizer, config):
 
     return mse_loss, eq_res_m
 
-def ddpm_PINN_dyn_step(model, diffusion, y, optimizer, config):
+def ddpm_PINN_dyn_step(dataset, model, diffusion, y, optimizer, config):
     batch_size = y.shape[0]
     t = torch.randint(0, diffusion.num_timesteps, size=(batch_size,), device=y.device)
 
@@ -79,7 +79,7 @@ def ddpm_PINN_dyn_step(model, diffusion, y, optimizer, config):
         a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
         a_b = a_b.view(-1, 1, 1, 1, 1)
         x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
-        eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+        eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
         eq_res_m = torch.mean(torch.abs(eq_residual))
         
     coef = mse_loss / eq_res_m
@@ -90,7 +90,7 @@ def ddpm_PINN_dyn_step(model, diffusion, y, optimizer, config):
 
     return mse_loss, eq_res_m
 
-def ddpm_ConFIG_step(model, diffusion, y, optimizer, config, operator):
+def ddpm_ConFIG_step(dataset, model, diffusion, y, optimizer, config, operator):
     batch_size = y.shape[0]
     t = torch.randint(0, diffusion.num_timesteps, size=(batch_size,), device=y.device)
 
@@ -104,7 +104,7 @@ def ddpm_ConFIG_step(model, diffusion, y, optimizer, config, operator):
         a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
         a_b = a_b.view(-1, 1, 1, 1, 1)
         x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
-        eq_residual = utils.compute_divergence(x0_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+        eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
         eq_res_m = torch.mean(torch.abs(eq_residual))
     
     # ConFIG
@@ -195,17 +195,17 @@ def train_ddpm(config):
             
             # Perform the training step
             if config.Training.method == "std":
-                loss, physics_loss = ddpm_standard_step(model, diffusion, x1, optimizer, config)
+                loss, physics_loss = ddpm_standard_step(dataset, model, diffusion, x1, optimizer, config)
                 
             elif config.Training.method == "PINN":
-                loss, physics_loss = ddpm_PINN_step(model, diffusion, x1, optimizer, config)
+                loss, physics_loss = ddpm_PINN_step(dataset, model, diffusion, x1, optimizer, config)
                 
             elif config.Training.method == "PINN_dyn":
-                loss, physics_loss = ddpm_PINN_dyn_step(model, diffusion, x1, optimizer, config)
+                loss, physics_loss = ddpm_PINN_dyn_step(dataset, model, diffusion, x1, optimizer, config)
                 
             elif config.Training.method == "ConFIG":
                 operator = ConFIGOperator(length_model=UniProjectionLength())
-                loss, physics_loss = ddpm_ConFIG_step(model, diffusion, x1, optimizer, config, operator)
+                loss, physics_loss = ddpm_ConFIG_step(dataset, model, diffusion, x1, optimizer, config, operator)
                 
             else:
                 raise ValueError(f"Unknown training method: {config.Training.method}")

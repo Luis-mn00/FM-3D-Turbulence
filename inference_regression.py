@@ -18,7 +18,7 @@ from my_config_length import UniProjectionLength
 plot_folder = "generated_plots"
 os.makedirs(plot_folder, exist_ok=True)
 
-def sparse_experiment(config, model, nsamples, samples_x, samples_y):
+def sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y):
     
     losses = []
     residuals = []
@@ -39,8 +39,8 @@ def sparse_experiment(config, model, nsamples, samples_x, samples_y):
                                  f"super_regression_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
-        residuals.append(torch.mean(torch.abs(utils.compute_divergence(y_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size))).item())
-        residuals_gt.append(torch.mean(torch.abs(utils.compute_divergence(y[:, :3, :, :, :], 2*math.pi/config.Data.grid_size))).item())
+        residuals.append(torch.mean(torch.abs(utils.compute_divergence(dataset.Y_scaler.inverse(y_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size))).item())
+        residuals_gt.append(torch.mean(torch.abs(utils.compute_divergence(dataset.Y_scaler.inverse(y[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size))).item())
         residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
         # Detach tensors before passing them to LSiM_distance
         y = y.detach()
@@ -88,4 +88,4 @@ if __name__ == "__main__":
     samples_x, samples_y = dataset.test_dataset
     print(samples_y.shape)
     print(samples_x.shape)
-    sparse_experiment(config, model, num_samples, samples_x, samples_y)
+    sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y)

@@ -19,4 +19,4 @@ Training:
   gamma: 0.995
   last_lr: 1e-5
 
-device: "cuda:3"
+device: "cuda:0"

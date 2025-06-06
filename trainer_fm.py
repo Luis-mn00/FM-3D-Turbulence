@@ -33,7 +33,7 @@ def fm_standard_step(model, xt, t, target, optimizer, config):
     
     return total_loss, loss
 
-def fm_PINN_step(model, xt, t, target, optimizer, config):
+def fm_PINN_step(dataset, model, xt, t, target, optimizer, config):
     # Forward pass
     pred = model(xt, t)
     pred = pred.sample
@@ -42,7 +42,7 @@ def fm_PINN_step(model, xt, t, target, optimizer, config):
     x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+    divergence = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
     divergence_loss = torch.mean(torch.abs(divergence))
     #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
 
@@ -56,7 +56,7 @@ def fm_PINN_step(model, xt, t, target, optimizer, config):
     
     return total_loss, loss
 
-def fm_PINN_dyn_step(model, xt, t, target, optimizer, config):
+def fm_PINN_dyn_step(dataset, model, xt, t, target, optimizer, config):
     # Forward pass
     pred = model(xt, t)
     pred = pred.sample
@@ -65,7 +65,7 @@ def fm_PINN_dyn_step(model, xt, t, target, optimizer, config):
     x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+    divergence = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
     divergence_loss = torch.mean(torch.abs(divergence))
     #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
 
@@ -80,7 +80,7 @@ def fm_PINN_dyn_step(model, xt, t, target, optimizer, config):
     
     return total_loss, loss
 
-def fm_ConFIG_step(model, xt, t, target, optimizer, config, operator):
+def fm_ConFIG_step(dataset, model, xt, t, target, optimizer, config, operator):
     # Forward pass
     pred = model(xt, t)
     pred = pred.sample
@@ -89,7 +89,7 @@ def fm_ConFIG_step(model, xt, t, target, optimizer, config, operator):
     x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(x1_pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+    divergence = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
     divergence_loss = torch.mean(torch.abs(divergence))
     #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
     
@@ -196,14 +196,14 @@ def train_flow_matching(config):
                 total_loss, loss = fm_standard_step(model, xt, t, target, optimizer, config)
                 
             elif config.Training.method == "PINN":
-                total_loss, loss = fm_PINN_step(model, xt, t, target, optimizer, config)
+                total_loss, loss = fm_PINN_step(dataset, model, xt, t, target, optimizer, config)
                 
             elif config.Training.method == "PINN_dyn":
-                total_loss, loss = fm_PINN_dyn_step(model, xt, t, target, optimizer, config)
+                total_loss, loss = fm_PINN_dyn_step(dataset, model, xt, t, target, optimizer, config)
                 
             elif config.Training.method == "ConFIG":
                 operator = ConFIGOperator(length_model=UniProjectionLength())
-                total_loss, loss = fm_ConFIG_step(model, xt, t, target, optimizer, config, operator)
+                total_loss, loss = fm_ConFIG_step(dataset, model, xt, t, target, optimizer, config, operator)
                 
             else:
                 raise ValueError(f"Unknown training method: {config.Training.method}")

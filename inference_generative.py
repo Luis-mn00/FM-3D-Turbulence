@@ -19,22 +19,23 @@ def integrate_ode_and_sample(config, model, num_samples=1, steps=10):
     model.eval().requires_grad_(False)
 
     samples = []
-    for _ in range(num_samples):
-        print(f"Generating sample {_+1}/{num_samples}")
-        # Initialize random sample
-        xt = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device)
+    with torch.no_grad():
+        for _ in range(num_samples):
+            print(f"Generating sample {_+1}/{num_samples}")
+            # Initialize random sample
+            xt = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device)
 
-        for i, t in enumerate(torch.linspace(0, 1, steps, device=config.device), start=1):
-            #print(f"Step {i}/{steps}")
-            # Predict the flow
-            pred = model(xt, t.expand(xt.size(0)))
-            pred = pred.sample
+            for i, t in enumerate(torch.linspace(0, 1, steps, device=config.device), start=1):
+                #print(f"Step {i}/{steps}")
+                # Predict the flow
+                pred = model(xt, t.expand(xt.size(0)))
+                pred = pred.sample
 
-            # Update xt using the ODE integration step
-            xt = xt + (1 / steps) * pred
+                # Update xt using the ODE integration step
+                xt = xt + (1 / steps) * pred
 
-        # Only store the final generated sample
-        samples.append(xt.cpu().detach())
+            # Only store the final generated sample
+            samples.append(xt.cpu().detach())
         
     return samples
 
@@ -61,29 +62,30 @@ def ddim(x, model, t_start, reverse_steps, betas, alphas_cumprod):
     next_seq = [-1] + (seq[:-1])
     n = x.size(0)
 
-    for i, j in zip(reversed(seq), reversed(next_seq)):
-        #t = (torch.ones(n) * i).to(x.device)
-        t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)  # Normalize time to [1, 0]
-        print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
+    with torch.no_grad():
+        for i, j in zip(reversed(seq), reversed(next_seq)):
+            #t = (torch.ones(n) * i).to(x.device)
+            t = torch.full((n,), i / t_start, dtype=torch.float, device=x.device)  # Normalize time to [1, 0]
+            #print(f"Step {i}/{t_start}, Time: {t[0].item():.4f}")
 
-        alpha_bar_t = alphas_cumprod[i] if i < len(alphas_cumprod) else alphas_cumprod[-1]
-        alpha_bar_next = alphas_cumprod[j] if 0 <= j < len(alphas_cumprod) else alpha_bar_t
-        
-        # Predict velocity v_theta(x_t, t) using the model
-        #v = model(x, 1 - t / t_start)
-        v = model(x, t)
-        v = v.sample
+            alpha_bar_t = alphas_cumprod[i] if i < len(alphas_cumprod) else alphas_cumprod[-1]
+            alpha_bar_next = alphas_cumprod[j] if 0 <= j < len(alphas_cumprod) else alpha_bar_t
+            
+            # Predict velocity v_theta(x_t, t) using the model
+            #v = model(x, 1 - t / t_start)
+            v = model(x, t)
+            v = v.sample
 
-        # Convert velocity to noise epsilon
-        e = velocity_to_epsilon(v, x, t, alpha_bar_t)
+            # Convert velocity to noise epsilon
+            e = velocity_to_epsilon(v, x, t, alpha_bar_t)
 
-        # Classic DDIM x0 prediction and update
-        x0_pred = (x - e * (1 - alpha_bar_t).sqrt()) / alpha_bar_t.sqrt()
-        x = alpha_bar_next.sqrt() * x0_pred + (1 - alpha_bar_next).sqrt() * e
+            # Classic DDIM x0 prediction and update
+            x0_pred = (x - e * (1 - alpha_bar_t).sqrt()) / alpha_bar_t.sqrt()
+            x = alpha_bar_next.sqrt() * x0_pred + (1 - alpha_bar_next).sqrt() * e
 
-        # Free memory of intermediate tensors
-        del v, e, x0_pred
-        torch.cuda.empty_cache()
+            # Free memory of intermediate tensors
+            del v, e, x0_pred
+            torch.cuda.empty_cache()
 
     return x
 
@@ -104,21 +106,21 @@ def generate_samples_with_denoiser(config, model, num_samples, t_start, reverse_
         
     return samples
 
-def residual_of_generated(samples, samples_gt, config):
+def residual_of_generated(dataset, samples, samples_gt, config):
     rmse_loss = np.zeros(len(samples))
     for i in range(len(samples)):
         # Ensure all tensors are on the same device
         sample = samples[i].to(config.device)
-        res, = utils.compute_divergence(sample[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-        rmse_loss[i] = torch.mean(torch.abs(res**2))
+        res = utils.compute_divergence(dataset.data_scaler.inverse(sample[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
+        rmse_loss[i] = torch.mean(torch.abs(res))
         #rmse_loss[i] = torch.sqrt(torch.sum(res**2))
     
     test_residuals = []
     for i in range(len(samples)):
         sample_gt = samples_gt[i].to(config.device)
         sample_gt = sample_gt.unsqueeze(0)
-        res_gt, = utils.compute_divergence(sample_gt[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
-        test_residuals.append(torch.mean(torch.abs(res_gt**2)))
+        res_gt = utils.compute_divergence(dataset.data_scaler.inverse(sample_gt[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
+        test_residuals.append(torch.mean(torch.abs(res_gt)))
         
     print(f"L2 residual: {np.mean(rmse_loss):.4f} +/- {np.std(rmse_loss):.4f}") 
     # Ensure test_residuals is a numpy array on CPU
@@ -170,7 +172,7 @@ if __name__ == "__main__":
     model.eval()
 
     # Generate samples using ODE integration
-    num_samples = 1
+    num_samples = 50
     #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, num_samples=num_samples, field=None)
     dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
                                                     norm=config.Data.norm,
@@ -185,16 +187,16 @@ if __name__ == "__main__":
         utils.plot_slice(samples_gt, i, 1, 63, f"gt_sample_{i}")
     
     print("Generating samples...")
-    #samples_fm = integrate_ode_and_sample(config, model, num_samples=num_samples, steps=100)
-    #for i, sample in enumerate(samples_fm):
-    #    utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
+    samples_fm = integrate_ode_and_sample(config, model, num_samples=num_samples, steps=100)
+    for i, sample in enumerate(samples_fm):
+        utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
         
     # Generate samples using the denoising model
-    samples_ddim = generate_samples_with_denoiser(config, model, num_samples, t_start=1000, reverse_steps=20, T=1000)
+    samples_ddim = generate_samples_with_denoiser(config, model, num_samples, t_start=1000, reverse_steps=50, T=1000)
     for i, sample in enumerate(samples_ddim):
         utils.plot_slice(sample, 0, 1, 63, f"generated_sample_diff_{i}")
         
-    #residual_of_generated(samples_fm, samples_gt, config)
-    #test_wasserstein(samples_fm, samples_gt, config)
-    residual_of_generated(samples_ddim, samples_gt, config)
+    residual_of_generated(dataset, samples_fm, samples_gt, config)
+    test_wasserstein(samples_fm, samples_gt, config)
+    residual_of_generated(dataset, samples_ddim, samples_gt, config)
     test_wasserstein(samples_ddim, samples_gt, config)

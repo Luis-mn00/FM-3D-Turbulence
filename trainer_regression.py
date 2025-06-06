@@ -33,14 +33,14 @@ def standard_step(model, x, target, optimizer, config):
     
     return total_loss, loss
 
-def PINN_step(model, x, target, optimizer, config):
+def PINN_step(dataset, model, x, target, optimizer, config):
     # Forward pass
     pred = model(x)
     pred = pred.sample
     loss = ((target - pred) ** 2).mean()
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+    divergence = utils.compute_divergence(dataset.Y_scaler.inverse(pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
     divergence_loss = torch.mean(torch.abs(divergence))
 
     # Combine the flow matching loss and the divergence-free loss
@@ -53,14 +53,14 @@ def PINN_step(model, x, target, optimizer, config):
     
     return total_loss, loss
 
-def PINN_dyn_step(model, x, target, optimizer, config):
+def PINN_dyn_step(dataset, model, x, target, optimizer, config):
     # Forward pass
     pred = model(x)
     pred = pred.sample
     loss = ((target - pred) ** 2).mean()
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+    divergence = utils.compute_divergence(dataset.Y_scaler.inverse(pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
     divergence_loss = torch.mean(torch.abs(divergence))
 
     # Combine the flow matching loss and the divergence-free loss
@@ -74,14 +74,14 @@ def PINN_dyn_step(model, x, target, optimizer, config):
     
     return total_loss, loss
 
-def ConFIG_step(model, x, target, optimizer, config, operator):
+def ConFIG_step(dataset, model, x, target, optimizer, config, operator):
     # Forward pass
     pred = model(x)
     pred = pred.sample
     loss = ((target - pred) ** 2).mean()
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(pred[:, :3, :, :, :], 2*math.pi/config.Data.grid_size)
+    divergence = utils.compute_divergence(dataset.Y_scaler.inverse(pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
     divergence_loss = torch.mean(torch.abs(divergence))
     
     # ConFIG
@@ -178,14 +178,14 @@ def train_flow_matching(config):
                 total_loss, loss = standard_step(model, x, y, optimizer, config)
                 
             elif config.Training.method == "PINN":
-                total_loss, loss = PINN_step(model, x, y, optimizer, config)
+                total_loss, loss = PINN_step(dataset, model, x, y, optimizer, config)
                 
             elif config.Training.method == "PINN_dyn":
-                total_loss, loss = PINN_dyn_step(model, x, y, optimizer, config)
+                total_loss, loss = PINN_dyn_step(dataset, model, x, y, optimizer, config)
                 
             elif config.Training.method == "ConFIG":
                 operator = ConFIGOperator(length_model=UniProjectionLength())
-                total_loss, loss = ConFIG_step(model, x, y, optimizer, config, operator)
+                total_loss, loss = ConFIG_step(dataset, model, x, y, optimizer, config, operator)
                 
             else:
                 raise ValueError(f"Unknown training method: {config.Training.method}")

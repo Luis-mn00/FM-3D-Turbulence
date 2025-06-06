@@ -47,14 +47,15 @@ def load_ae_model(config):
 
 def integrate_ode_and_sample(config, model, x_lr, steps=10):
     xt = x_lr.to(config.device).float()
-    for i, t in enumerate(torch.linspace(0, 1, steps, device=config.device), start=1):
-        #print(f"Step {i}/{steps}")
-        pred = model(xt, t.expand(xt.size(0)))
-        xt = xt + (1 / steps) * pred
+    with torch.no_grad():
+        for i, t in enumerate(torch.linspace(0, 1, steps, device=config.device), start=1):
+            #print(f"Step {i}/{steps}")
+            pred = model(xt, t.expand(xt.size(0)))
+            xt = xt + (1 / steps) * pred
 
     return xt
 
-def fm_sparse_experiment(config, model, ae, nsamples, samples_x, samples_y):
+def fm_sparse_experiment(dataset, config, model, ae, nsamples, samples_x, samples_y):
     
     losses = []
     residuals = []
@@ -78,8 +79,8 @@ def fm_sparse_experiment(config, model, ae, nsamples, samples_x, samples_y):
                                  f"super_latent_direct_route_{i}")
 
         losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
-        residuals.append(torch.mean(torch.abs(utils.compute_divergence(y_pred[:, :3, :, :, :]))).item())
-        residuals_gt.append(torch.mean(torch.abs(utils.compute_divergence(y[:, :3, :, :, :]))).item())
+        residuals.append(torch.mean(torch.abs(utils.compute_divergence(dataset.Y_scaler.inverse(y_pred[:, :3, :, :, :].to("cpu"))))).item())
+        residuals_gt.append(torch.mean(torch.abs(utils.compute_divergence(dataset.Y_scaler.inverse(y[:, :3, :, :, :].to("cpu"))))).item())
         residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
         # Detach tensors before passing them to LSiM_distance
         y = y.detach()
@@ -128,4 +129,4 @@ if __name__ == "__main__":
     print(samples_y.shape)
     print(samples_x.shape)
     
-    fm_sparse_experiment(config, model, ae, num_samples, samples_x, samples_y)
+    fm_sparse_experiment(dataset, config, model, ae, num_samples, samples_x, samples_y)

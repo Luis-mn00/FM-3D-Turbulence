@@ -223,11 +223,7 @@ plt.savefig("generated_plots/vz_optim.png")
 dataset_optim = torch.load(f'data/data_spectral_128_mindiv.pt', weights_only=False, map_location='cpu')
 if isinstance(dataset_optim, np.ndarray):
     dataset_optim = torch.from_numpy(dataset_optim)
-    
-velocity = dataset_optim[0, :, :, :, :].unsqueeze(0)
-print(velocity.shape)
-utils.plot_slice(velocity, 0, 0, int(128/2), "grid_before")
 
-velocity_lr = utils.downscale_data(velocity, 4)
-print(velocity_lr.shape)
-utils.plot_slice(velocity_lr, 0, 0, int(128/2), "grid_after")
+velocity = dataset_optim[480].unsqueeze(0)
+div = utils.compute_divergence(velocity, 2*math.pi/128)
+print(torch.mean(torch.abs(div)))

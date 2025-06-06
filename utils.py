@@ -199,7 +199,7 @@ def interpolate_dataset(dataset, perc, method="nearest"):
     sampled_ids = np.zeros((n_samples, n_points), dtype=np.int32)
 
     for i in range(n_samples):
-        print(f"sample {i+1}/{n_samples}")
+        #print(f"sample {i+1}/{n_samples}")
         sampled_ids[i] = np.array(random.sample(range(np.prod(dims)), n_points))
         for c in range(n_channels):
             X_vals[i, c] = interpolate_points(X_vals[i, c], perc=perc, ids=sampled_ids[i], method=method)

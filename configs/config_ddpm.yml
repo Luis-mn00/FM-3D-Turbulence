@@ -8,7 +8,7 @@ Model:
   channel_size_out: 3  
   partition_size: [1, 1, 1] 
   drop_class_labels: True  
-  save_path: "runs/127/epoch_90_0.0672_0.0397.pth" # std
+  save_path: "runs/002/epoch_800_0.0427_0.0408.pth" # std
 
 Training:
   method: "std"
@@ -26,4 +26,4 @@ Diffusion:
   beta_end: 0.02
   mask_schedule_sig: 3
 
-device: "cuda:1"
+device: "cuda:2"
