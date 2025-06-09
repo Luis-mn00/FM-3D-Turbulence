@@ -1,0 +1,132 @@
+nohup: ignoring input
+/home/navarro/anaconda3/envs/fm3d/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+Loading config...
+cuda:1
+CUDA current device: 0
+CUDA device name: NVIDIA L40S
+Loading dataset...
+N_time: 500, N_channels: 3, Nx: 128, Ny: 128, Nz: 128
+Loading model...
+/home/navarro/anaconda3/envs/fm3d/lib/python3.10/site-packages/torch/functional.py:554: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at /pytorch/aten/src/ATen/native/TensorShape.cpp:4314.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+Sample 1/50
+Plot saved in generated_plots/super_interp_0.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 2/50
+Plot saved in generated_plots/super_interp_1.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 3/50
+Plot saved in generated_plots/super_interp_2.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 4/50
+Plot saved in generated_plots/super_interp_3.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 5/50
+Plot saved in generated_plots/super_interp_4.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 6/50
+Plot saved in generated_plots/super_interp_5.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 7/50
+Plot saved in generated_plots/super_interp_6.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 8/50
+Plot saved in generated_plots/super_interp_7.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 9/50
+Plot saved in generated_plots/super_interp_8.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 10/50
+Plot saved in generated_plots/super_interp_9.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 11/50
+Plot saved in generated_plots/super_interp_10.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 12/50
+Plot saved in generated_plots/super_interp_11.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 13/50
+Plot saved in generated_plots/super_interp_12.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 14/50
+Plot saved in generated_plots/super_interp_13.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 15/50
+Plot saved in generated_plots/super_interp_14.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 16/50
+Plot saved in generated_plots/super_interp_15.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 17/50
+Plot saved in generated_plots/super_interp_16.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 18/50
+Plot saved in generated_plots/super_interp_17.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 19/50
+Plot saved in generated_plots/super_interp_18.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 20/50
+Plot saved in generated_plots/super_interp_19.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 21/50
+Plot saved in generated_plots/super_interp_20.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 22/50
+Plot saved in generated_plots/super_interp_21.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 23/50
+Plot saved in generated_plots/super_interp_22.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 24/50
+Plot saved in generated_plots/super_interp_23.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 25/50
+Plot saved in generated_plots/super_interp_24.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 26/50
+Plot saved in generated_plots/super_interp_25.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 27/50
+Plot saved in generated_plots/super_interp_26.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Sample 28/50
+Plot saved in generated_plots/super_interp_27.png
+Loading model from LSIM_3D/models/VolSiM.pth
+Traceback (most recent call last):
+  File "/home/navarro/FM-3D-Turbulence/inference_super.py", line 463, in <module>
+    fm_interp_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y)
+  File "/home/navarro/FM-3D-Turbulence/inference_super.py", line 83, in fm_interp_sparse_experiment
+    lsim.append(utils.LSiM_distance_3D(y, y_pred))
+  File "/home/navarro/FM-3D-Turbulence/utils.py", line 292, in LSiM_distance_3D
+    dist = model_3d.computeDistance(A, B, normalize=True, interpolate=False)
+  File "/home/navarro/FM-3D-Turbulence/LSIM_3D/src/volsim/distance_model.py", line 231, in computeDistance
+    output = self(sample)
+  File "/home/navarro/anaconda3/envs/fm3d/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/navarro/anaconda3/envs/fm3d/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/navarro/FM-3D-Turbulence/LSIM_3D/src/volsim/distance_model.py", line 173, in forward
+    outBaseB = self.basenet(dataB)
+  File "/home/navarro/anaconda3/envs/fm3d/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/navarro/anaconda3/envs/fm3d/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/navarro/FM-3D-Turbulence/LSIM_3D/src/volsim/base_models.py", line 185, in forward
+    h = self.slice0(X)
+  File "/home/navarro/anaconda3/envs/fm3d/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/navarro/anaconda3/envs/fm3d/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/navarro/anaconda3/envs/fm3d/lib/python3.10/site-packages/torch/nn/modules/container.py", line 240, in forward
+    input = module(input)
+  File "/home/navarro/anaconda3/envs/fm3d/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/navarro/anaconda3/envs/fm3d/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/navarro/anaconda3/envs/fm3d/lib/python3.10/site-packages/torch/nn/modules/conv.py", line 725, in forward
+    return self._conv_forward(input, self.weight, self.bias)
+  File "/home/navarro/anaconda3/envs/fm3d/lib/python3.10/site-packages/torch/nn/modules/conv.py", line 720, in _conv_forward
+    return F.conv3d(
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 32.00 MiB. GPU 0 has a total capacity of 44.52 GiB of which 15.25 MiB is free. Process 133198 has 42.04 GiB memory in use. Process 194365 has 496.00 MiB memory in use. Including non-PyTorch memory, this process has 700.00 MiB memory in use. Process 195792 has 498.00 MiB memory in use. Process 196141 has 804.00 MiB memory in use. Of the allocated memory 167.61 MiB is allocated by PyTorch, and 36.39 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)

@@ -224,6 +224,8 @@ dataset_optim = torch.load(f'data/data_spectral_128_mindiv.pt', weights_only=Fal
 if isinstance(dataset_optim, np.ndarray):
     dataset_optim = torch.from_numpy(dataset_optim)
 
-velocity = dataset_optim[480].unsqueeze(0)
-div = utils.compute_divergence(velocity, 2*math.pi/128)
-print(torch.mean(torch.abs(div)))
+velocity = dataset_optim[0].unsqueeze(0)
+print(velocity.shape)
+
+blurr = utils.compute_blurriness(velocity)
+print(blurr)

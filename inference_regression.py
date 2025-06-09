@@ -25,6 +25,7 @@ def sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y):
     residuals_gt = []
     residuals_diff = []
     lsim = []
+    blurriness = []
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
@@ -47,10 +48,17 @@ def sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y):
         y_pred = y_pred.detach()
         lsim.append(utils.LSiM_distance_3D(y, y_pred))
         
+        y = y.squeeze(0)
+        y_pred = y_pred.squeeze(0)
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+    print(f"Mean blurriness: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
 
 # Main script
 if __name__ == "__main__":
@@ -61,7 +69,7 @@ if __name__ == "__main__":
     print(config.device)
     
     # Generate samples using ODE integration
-    num_samples = 10
+    num_samples = 50
     #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, num_samples=num_samples, field=None)
     dataset = SupervisedSpectralTurbulenceDataset(grid_size=config.Data.grid_size,
                                                     norm=config.Data.norm,

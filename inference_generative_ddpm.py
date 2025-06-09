@@ -107,6 +107,21 @@ def test_wasserstein(samples, samples_gt, config):
     mean_wasserstein = np.mean(wasserstein_cmf_distances)
     std_wasserstein = np.std(wasserstein_cmf_distances)
     print(f"Wasserstein distance: {mean_wasserstein:.4f} +/- {std_wasserstein:.4f}")
+    
+def test_blurriness(samples, samples_gt, config):
+    blurriness = []
+    for i in range(len(samples)):
+        y = samples_gt[i]  # Ground truth sample: (C, D, D, D)
+        y_pred = samples[i].squeeze(0)  # Prediction: (C, D, D, D)
+        
+        # Compute blurriness using Laplacian variance
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+
+    mean_blurriness = np.mean(blurriness)
+    std_blurriness = np.std(blurriness)
+    print(f"Blurriness: {mean_blurriness:.4f} +/- {std_blurriness:.4f}")
 
 if __name__ == "__main__":
     # Load the configuration
@@ -153,3 +168,4 @@ if __name__ == "__main__":
         
     residual_of_generated(dataset, samples_ddpm, samples_gt, config)
     test_wasserstein(samples_ddpm, samples_gt, config)
+    test_blurriness(samples_ddpm, samples_gt, config)

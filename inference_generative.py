@@ -149,6 +149,21 @@ def test_wasserstein(samples, samples_gt, config):
     mean_wasserstein = np.mean(wasserstein_cmf_distances)
     std_wasserstein = np.std(wasserstein_cmf_distances)
     print(f"Wasserstein distance: {mean_wasserstein:.4f} +/- {std_wasserstein:.4f}")
+    
+def test_blurriness(samples, samples_gt, config):
+    blurriness = []
+    for i in range(len(samples)):
+        y = samples_gt[i]  # Ground truth sample: (C, D, D, D)
+        y_pred = samples[i].squeeze(0)  # Prediction: (C, D, D, D)
+        
+        # Compute blurriness using Laplacian variance
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+
+    mean_blurriness = np.mean(blurriness)
+    std_blurriness = np.std(blurriness)
+    print(f"Blurriness: {mean_blurriness:.4f} +/- {std_blurriness:.4f}")
 
 if __name__ == "__main__":
     # Load the configuration
@@ -172,7 +187,7 @@ if __name__ == "__main__":
     model.eval()
 
     # Generate samples using ODE integration
-    num_samples = 50
+    num_samples = 5
     #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, num_samples=num_samples, field=None)
     dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
                                                     norm=config.Data.norm,
@@ -192,11 +207,12 @@ if __name__ == "__main__":
         utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
         
     # Generate samples using the denoising model
-    samples_ddim = generate_samples_with_denoiser(config, model, num_samples, t_start=1000, reverse_steps=50, T=1000)
-    for i, sample in enumerate(samples_ddim):
-        utils.plot_slice(sample, 0, 1, 63, f"generated_sample_diff_{i}")
+    #samples_ddim = generate_samples_with_denoiser(config, model, num_samples, t_start=1000, reverse_steps=50, T=1000)
+    #for i, sample in enumerate(samples_ddim):
+    #    utils.plot_slice(sample, 0, 1, 63, f"generated_sample_diff_{i}")
         
     residual_of_generated(dataset, samples_fm, samples_gt, config)
     test_wasserstein(samples_fm, samples_gt, config)
-    residual_of_generated(dataset, samples_ddim, samples_gt, config)
-    test_wasserstein(samples_ddim, samples_gt, config)
+    test_blurriness(samples_fm, samples_gt, config)
+    #residual_of_generated(dataset, samples_ddim, samples_gt, config)
+    #test_wasserstein(samples_ddim, samples_gt, config)

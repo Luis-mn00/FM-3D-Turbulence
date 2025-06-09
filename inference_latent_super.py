@@ -66,6 +66,8 @@ def fm_interp_sparse_experiment_latent(dataset, config, config_ae, model, ae, ns
     residuals_gt = []
     residuals_diff = []
     lsim = []
+    blurriness = []
+    
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
         x = samples_x[i].unsqueeze(0).to(config.device)
@@ -95,10 +97,18 @@ def fm_interp_sparse_experiment_latent(dataset, config, config_ae, model, ae, ns
         y = y.detach()
         y_pred = y_pred.detach()
         lsim.append(utils.LSiM_distance_3D(y, y_pred))
+        
+        y = y.squeeze(0)
+        y_pred = y_pred.squeeze(0)
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}")
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+    print(f"Mean blurriness: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
 
 def fm_mask(fm_model, ae_model, x, x_lr, steps, mask):
     mu1, logvar1 = ae.encode(x)
@@ -112,7 +122,7 @@ def fm_mask(fm_model, ae_model, x, x_lr, steps, mask):
             #print(f"Step {i}/{steps}")
             if t > (1 - 1e-3):
                 t = torch.tensor([1 - 1e-3], device=z.device)
-            mask_t = mask * (1 - t)
+            mask_t = mask * (1 - t)**3
 
             # Flow Matching model prediction in latent space
             pred = fm_model(zt, t.expand(zt.size(0)))  # predicted vector field
@@ -144,6 +154,7 @@ def fm_mask_sparse_experiment_latent(dataset, config, config_ae, model, ae, nsam
     residuals_gt = []
     residuals_diff = []
     lsim = []
+    blurriness = []
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
@@ -178,10 +189,17 @@ def fm_mask_sparse_experiment_latent(dataset, config, config_ae, model, ae, nsam
         y_pred = y_pred.detach()
         lsim.append(utils.LSiM_distance_3D(y, y_pred))
         
+        y = y.squeeze(0)
+        y_pred = y_pred.squeeze(0)
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+    print(f"Mean blurriness: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
     
 def fm_diff_mask_sparse_experiment_latent(dataset, config, config_ae, model, ae, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044):
     
@@ -190,6 +208,7 @@ def fm_diff_mask_sparse_experiment_latent(dataset, config, config_ae, model, ae,
     residuals_gt = []
     residuals_diff = []
     lsim = []
+    blurriness = []
     
     if samples_ids is not None:
         diffuse_masks = torch.zeros(len(samples_ids), config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
@@ -206,7 +225,7 @@ def fm_diff_mask_sparse_experiment_latent(dataset, config, config_ae, model, ae,
             diffuse_masks[j] = torch.tensor(mask, dtype=torch.float).unsqueeze(0).repeat(config.Model.channel_size, 1, 1, 1)
     else:
         diffuse_masks = torch.zeros(nsamples, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
-        for i in range(nsamples):
+        for j in range(nsamples):
             total_voxels = config.Data.grid_size ** 3
             ids = random.sample(range(total_voxels), int(total_voxels * w_mask))
             mask = utils.diffuse_mask(
@@ -238,10 +257,17 @@ def fm_diff_mask_sparse_experiment_latent(dataset, config, config_ae, model, ae,
         y_pred = y_pred.detach()
         lsim.append(utils.LSiM_distance_3D(y, y_pred))
         
+        y = y.squeeze(0)
+        y_pred = y_pred.squeeze(0)
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+    print(f"Mean blurriness: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
 
 
 # Main script

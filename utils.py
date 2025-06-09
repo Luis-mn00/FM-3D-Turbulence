@@ -15,6 +15,7 @@ import vedo
 from torchfsm.operator import Div
 from torchfsm.mesh import MeshGrid
 from scipy.ndimage import zoom
+from scipy.ndimage import laplace
 
 def dict2namespace(config):
     namespace = argparse.Namespace()
@@ -103,9 +104,22 @@ def plot_2d_comparison(low_res, high_res, gt, filename):
     # Save the plot as a PNG file
     plt.tight_layout()
     filename = f"generated_plots/{filename}.png"
-    plt.savefig(filename)
+    plt.savefig(filename, bbox_inches='tight')
     plt.close()
     print(f"Plot saved in {filename}")
+    
+def compute_blurriness(tensor):
+    """
+    Compute variance of 3D Laplacian for each channel.
+    tensor: numpy.ndarray of shape (C, Lx, Ly, Lz)
+    Returns: numpy.ndarray of shape (C,) with Laplacian variances per channel
+    """
+    C = tensor.shape[0]
+    variances = np.zeros(C)
+    for c in range(C):
+        lap = laplace(tensor[c])
+        variances[c] = lap.var()
+    return np.mean(variances)
 
 def compute_divergence(velocity, h):
     assert velocity.shape[1] == 3, "Velocity must have 3 channels (vx, vy, vz)"
@@ -226,11 +240,11 @@ def downscale_data(high_res, scale_factor):
     X_upscaled = np.zeros((NN, Lx, Ly, Lz), dtype=np.float32)
 
     for i in range(NN):
-        print(f"sample {i}/{NN}")
+        #print(f"sample {i}/{NN}")
         # Downscale
-        X_small[i] = zoom(_high_res[i], zoom=(Lx_small / Lx, Ly_small / Ly, Lz_small / Lz), order=3)
+        X_small[i] = zoom(_high_res[i], zoom=(Lx_small / Lx, Ly_small / Ly, Lz_small / Lz), order=0)
         # Upscale
-        X_upscaled[i] = zoom(X_small[i], zoom=(Lx / Lx_small, Ly / Ly_small, Lz / Lz_small), order=3)
+        X_upscaled[i] = zoom(X_small[i], zoom=(Lx / Lx_small, Ly / Ly_small, Lz / Lz_small), order=0)
 
     if channels:
         X_upscaled = X_upscaled.reshape(N, C, Lx, Ly, Lz)

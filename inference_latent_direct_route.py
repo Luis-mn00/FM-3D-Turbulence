@@ -56,12 +56,12 @@ def integrate_ode_and_sample(config, model, x_lr, steps=10):
     return xt
 
 def fm_sparse_experiment(dataset, config, model, ae, nsamples, samples_x, samples_y):
-    
     losses = []
     residuals = []
     residuals_gt = []
     residuals_diff = []
     lsim = []
+    blurriness = []
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
@@ -87,10 +87,17 @@ def fm_sparse_experiment(dataset, config, model, ae, nsamples, samples_x, sample
         y_pred = y_pred.detach()
         lsim.append(utils.LSiM_distance(y, y_pred))
         
+        y = y.squeeze(0)
+        y_pred = y_pred.squeeze(0)
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+    print(f"Mean blurriness: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
 
 # Main script
 if __name__ == "__main__":

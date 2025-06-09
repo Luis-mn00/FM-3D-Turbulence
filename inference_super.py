@@ -40,7 +40,7 @@ def fm_mask(model, x, x_lr, steps, mask):
             #print(f"Step {i}/{steps}")
             if t > (1 - 1e-3):
                 t = torch.tensor([1 - 1e-3], device=config.device)
-            mask_t = mask * (1-t)
+            mask_t = mask * (1-t)**3
             pred = model(xt, t.expand(xt.size(0)))
             pred = pred.sample
             x1_pred = xt + (1-t)*pred                    
@@ -60,6 +60,7 @@ def fm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
     residuals_gt = []
     residuals_diff = []
     lsim = []
+    blurriness = []
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
@@ -82,10 +83,17 @@ def fm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
         y_pred = y_pred.detach()
         lsim.append(utils.LSiM_distance_3D(y, y_pred))
         
+        y = y.squeeze(0)
+        y_pred = y_pred.squeeze(0)
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
     
 def fm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1):
     
@@ -94,6 +102,7 @@ def fm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sampl
     residuals_gt = []
     residuals_diff = []
     lsim = []
+    blurriness = []
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
@@ -128,10 +137,17 @@ def fm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sampl
         y_pred = y_pred.detach()
         lsim.append(utils.LSiM_distance_3D(y, y_pred))
         
+        y = y.squeeze(0)
+        y_pred = y_pred.squeeze(0)
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
     
 def fm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044):
     
@@ -140,6 +156,7 @@ def fm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, 
     residuals_gt = []
     residuals_diff = []
     lsim = []
+    blurriness = []
     
     if samples_ids is not None:
         diffuse_masks = torch.zeros(len(samples_ids), config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
@@ -156,7 +173,7 @@ def fm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, 
             diffuse_masks[j] = torch.tensor(mask, dtype=torch.float).unsqueeze(0).repeat(config.Model.channel_size, 1, 1, 1)
     else:
         diffuse_masks = torch.zeros(nsamples, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
-        for i in range(nsamples):
+        for j in range(nsamples):
             total_voxels = config.Data.grid_size ** 3
             ids = random.sample(range(total_voxels), int(total_voxels * w_mask))
             mask = utils.diffuse_mask(
@@ -188,10 +205,17 @@ def fm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, 
         y_pred = y_pred.detach()
         lsim.append(utils.LSiM_distance_3D(y, y_pred))
         
+        y = y.squeeze(0)
+        y_pred = y_pred.squeeze(0)
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
 
 # Linear Beta Schedule (from beta_min to beta_max over the T timesteps)
 def get_linear_beta_schedule(T, beta_min=1e-4, beta_max=0.02):
@@ -264,7 +288,7 @@ def ddim_mask(model, x, x_lr, t_start, reverse_steps, betas, alphas_cumprod, mas
             # Classic DDIM x0 prediction and update
             x0_pred = (x - e * (1 - alpha_bar_t).sqrt()) / alpha_bar_t.sqrt()
             
-            mask_t = mask * (1 - t)
+            mask_t = mask * (1 - t)**3
             x_masked = x0_pred * (1 - mask_t) + x_lr * mask_t
             
             x = alpha_bar_next.sqrt() * x_masked + (1 - alpha_bar_next).sqrt() * e
@@ -283,6 +307,7 @@ def ddpm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, s
     residuals_gt = []
     residuals_diff = []
     lsim = []
+    blurriness = []
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
@@ -305,10 +330,17 @@ def ddpm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, s
         y_pred = y_pred.detach()
         lsim.append(utils.LSiM_distance_3D(y, y_pred))
         
+        y = y.squeeze(0)
+        y_pred = y_pred.squeeze(0)
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
     
 def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, t_start=1000, reverse_steps=50, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(T)
@@ -318,6 +350,7 @@ def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
     residuals_gt = []
     residuals_diff = []
     lsim = []
+    blurriness = []
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
@@ -352,10 +385,17 @@ def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
         y_pred = y_pred.detach()
         lsim.append(utils.LSiM_distance_3D(y, y_pred))
         
+        y = y.squeeze(0)
+        y_pred = y_pred.squeeze(0)
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
     
 def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044, t_start=1000, reverse_steps=50, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(T)
@@ -365,6 +405,7 @@ def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x
     residuals_gt = []
     residuals_diff = []
     lsim = []
+    blurriness = []
     
     if samples_ids is not None:
         diffuse_masks = torch.zeros(len(samples_ids), config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
@@ -381,7 +422,7 @@ def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x
             diffuse_masks[j] = torch.tensor(mask, dtype=torch.float).unsqueeze(0).repeat(config.Model.channel_size, 1, 1, 1)
     else:
         diffuse_masks = torch.zeros(nsamples, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
-        for i in range(nsamples):
+        for j in range(nsamples):
             total_voxels = config.Data.grid_size ** 3
             ids = random.sample(range(total_voxels), int(total_voxels * w_mask))
             mask = utils.diffuse_mask(
@@ -413,10 +454,17 @@ def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x
         y_pred = y_pred.detach()
         lsim.append(utils.LSiM_distance_3D(y, y_pred))
         
+        y = y.squeeze(0)
+        y_pred = y_pred.squeeze(0)
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
 
 # Main script
 if __name__ == "__main__":
@@ -431,7 +479,7 @@ if __name__ == "__main__":
         print(f"CUDA device name: {torch.cuda.get_device_name(torch.cuda.current_device())}")
     
     print("Loading dataset...")
-    num_samples = 50
+    num_samples = 5
     #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
     dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
                                                     norm=config.Data.norm,
@@ -444,7 +492,7 @@ if __name__ == "__main__":
     samples_y = dataset.test_dataset
     perc = 5
     samples_x, samples_ids = utils.interpolate_dataset(samples_y, perc/100)
-    #samples_x = utils.downscale_data(samples_y, 4)
+    #samples_x = utils.downscale_data(samples_y, 2)
     #samples_ids = None
 
     # Load the trained model
