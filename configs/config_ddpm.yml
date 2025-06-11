@@ -11,8 +11,8 @@ Model:
   save_path: "runs/002/epoch_800_0.0427_0.0408.pth" # std
 
 Training:
-  method: "std"
-  epochs: 1000
+  method: "ConFIG"
+  epochs: 2000
   batch_size: 4
   learning_rate: 5e-4
   ddpm_loss_weight: 1e-3

@@ -60,7 +60,7 @@ def generate_samples_with_denoiser(config, diffusion, model, num_samples):
     for _ in range(num_samples):
         print(f"Generating sample {_+1}/{num_samples}")
         noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device)
-        y_pred = diffusion.ddim(noise, model, 1000, 20, plot_prog=False)
+        y_pred = diffusion.ddim(noise, model, 1000, 100, plot_prog=False)
         #y_pred = ddim(noise, model, 1000, 20, betas, alphas_cumprod)
         samples.append(y_pred.cpu().detach())
         

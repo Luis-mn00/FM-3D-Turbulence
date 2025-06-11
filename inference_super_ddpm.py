@@ -85,7 +85,7 @@ def ddim_mask(model, x, x_lr, t_start, reverse_steps, betas, alphas_cumprod, mas
 
     return x
 
-def ddpm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, t_start=1000, reverse_steps=20, T=1000):
+def ddpm_interp_sparse_experiment(dataset, config, diffusion, model, nsamples, samples_x, samples_y, t_start=1000, reverse_steps=20, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(config.Diffusion.num_diffusion_timesteps, config.Diffusion.beta_start, config.Diffusion.beta_end)
     
     losses = []
@@ -101,7 +101,8 @@ def ddpm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, s
         y     = samples_y[i].unsqueeze(0).to(config.device)
         noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
         
-        y_pred = ddim_interp(model, noise.clone(), x.clone(), t_start, reverse_steps, betas, alphas_cumprod)
+        y_pred = diffusion.ddim_article(noise.clone(), model, t_start, reverse_steps)
+        #y_pred = ddim_interp(model, noise.clone(), x.clone(), t_start, reverse_steps, betas, alphas_cumprod)
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
@@ -128,7 +129,7 @@ def ddpm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, s
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
     
-def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, t_start=1000, reverse_steps=20, T=1000):
+def ddpm_mask_sparse_experiment(dataset, config, diffusion, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, t_start=1000, reverse_steps=20, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(config.Diffusion.num_diffusion_timesteps, config.Diffusion.beta_start, config.Diffusion.beta_end)
     
     losses = []
@@ -156,7 +157,8 @@ def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
         else:
             mask = torch.rand(x.shape, device=x.device) < w_mask
 
-        y_pred = ddim_mask(model, noise.clone(), x.clone(), t_start, reverse_steps, betas, alphas_cumprod, mask)
+        y_pred = diffusion.ddim_mask(noise.clone(), model, x.clone(), t_start, reverse_steps, w_mask=1.0, _mask=mask)
+        #y_pred = ddim_mask(model, noise.clone(), x.clone(), t_start, reverse_steps, betas, alphas_cumprod, mask)
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
@@ -183,7 +185,7 @@ def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
     
-def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044, t_start=1000, reverse_steps=20, T=1000):
+def ddpm_diff_mask_sparse_experiment(dataset, config, diffusion, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044, t_start=1000, reverse_steps=20, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(config.Diffusion.num_diffusion_timesteps, config.Diffusion.beta_start, config.Diffusion.beta_end)
     
     losses = []
@@ -225,7 +227,8 @@ def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x
         y     = samples_y[i].unsqueeze(0).to(config.device)
         noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
 
-        y_pred = ddim_mask(model, noise.clone(), x.clone(), t_start, reverse_steps, betas, alphas_cumprod, diffuse_masks[i].unsqueeze(0))
+        y_pred = diffusion.ddim_mask(noise.clone(), model, x.clone(), t_start, reverse_steps, diff_mask=diffuse_masks[i].unsqueeze(0))
+        #y_pred = ddim_mask(model, noise.clone(), x.clone(), t_start, reverse_steps, betas, alphas_cumprod, diffuse_masks[i].unsqueeze(0))
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
@@ -291,6 +294,9 @@ if __name__ == "__main__":
     #samples_x = utils.downscale_data(samples_y, 4)
     #samples_ids = None
     
-    ddpm_interp_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, reverse_steps=50)
-    ddpm_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=50)
-    ddpm_diff_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=50)
+    # Diffusion parameters
+    diffusion = Diffusion(config)
+    
+    ddpm_interp_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, reverse_steps=50)
+    ddpm_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=50)
+    ddpm_diff_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=50)
