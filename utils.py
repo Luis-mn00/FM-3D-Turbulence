@@ -34,14 +34,14 @@ class StdScaler(object):
 
     def __call__(self, x):
         shape = [1, -1] + [1] * (x.ndim - 2)
-        mean = self.mean.reshape(*shape)
-        std = self.std.reshape(*shape)
+        mean = self.mean.reshape(*shape).to(x.device)
+        std = self.std.reshape(*shape).to(x.device)
         return (x - mean) / std
 
     def inverse(self, x):
         shape = [1, -1] + [1] * (x.ndim - 2)
-        mean = self.mean.reshape(*shape)
-        std = self.std.reshape(*shape)
+        mean = self.mean.reshape(*shape).to(x.device)
+        std = self.std.reshape(*shape).to(x.device)
         return x * std + mean
 
     def scale(self):

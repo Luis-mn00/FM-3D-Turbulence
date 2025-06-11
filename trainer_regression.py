@@ -40,7 +40,7 @@ def PINN_step(dataset, model, x, target, optimizer, config):
     loss = ((target - pred) ** 2).mean()
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(dataset.Y_scaler.inverse(pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
+    divergence = utils.compute_divergence(dataset.Y_scaler.inverse(pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
     divergence_loss = torch.mean(torch.abs(divergence))
 
     # Combine the flow matching loss and the divergence-free loss
@@ -60,7 +60,7 @@ def PINN_dyn_step(dataset, model, x, target, optimizer, config):
     loss = ((target - pred) ** 2).mean()
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(dataset.Y_scaler.inverse(pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
+    divergence = utils.compute_divergence(dataset.Y_scaler.inverse(pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
     divergence_loss = torch.mean(torch.abs(divergence))
 
     # Combine the flow matching loss and the divergence-free loss
@@ -81,7 +81,7 @@ def ConFIG_step(dataset, model, x, target, optimizer, config, operator):
     loss = ((target - pred) ** 2).mean()
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(dataset.Y_scaler.inverse(pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
+    divergence = utils.compute_divergence(dataset.Y_scaler.inverse(pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
     divergence_loss = torch.mean(torch.abs(divergence))
     
     # ConFIG

@@ -42,7 +42,7 @@ def fm_PINN_step(dataset, model, xt, t, target, optimizer, config):
     x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
+    divergence = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
     divergence_loss = torch.mean(torch.abs(divergence))
     #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
 
@@ -65,7 +65,7 @@ def fm_PINN_dyn_step(dataset, model, xt, t, target, optimizer, config):
     x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
+    divergence = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
     divergence_loss = torch.mean(torch.abs(divergence))
     #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
 
@@ -89,7 +89,7 @@ def fm_ConFIG_step(dataset, model, xt, t, target, optimizer, config, operator):
     x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
 
     # Compute the divergence-free loss
-    divergence = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
+    divergence = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
     divergence_loss = torch.mean(torch.abs(divergence))
     #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
     

@@ -33,12 +33,11 @@ def ddpm_standard_step(dataset, model, diffusion, y, optimizer, config):
     optimizer.step()
 
     # Compute res_loss for metrics comparison
-    with torch.no_grad():
-        a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
-        a_b = a_b.view(-1, 1, 1, 1, 1)
-        x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
-        eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
-        eq_res_m = torch.mean(torch.abs(eq_residual))
+    a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
+    a_b = a_b.view(-1, 1, 1, 1, 1)
+    x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
+    eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
+    eq_res_m = torch.mean(torch.abs(eq_residual))
 
     return mse_loss, eq_res_m
 
@@ -52,12 +51,11 @@ def ddpm_PINN_step(dataset, model, diffusion, y, optimizer, config):
     mse_loss = (noise - e_pred).square().mean()
 
     # Compute res_loss for metrics comparison
-    with torch.no_grad():
-        a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
-        a_b = a_b.view(-1, 1, 1, 1, 1)
-        x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
-        eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
-        eq_res_m = torch.mean(torch.abs(eq_residual))
+    a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
+    a_b = a_b.view(-1, 1, 1, 1, 1)
+    x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
+    eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
+    eq_res_m = torch.mean(torch.abs(eq_residual))
         
     total_loss = mse_loss + config.Training.ddpm_loss_weight * eq_res_m
     total_loss.backward()
@@ -75,12 +73,11 @@ def ddpm_PINN_dyn_step(dataset, model, diffusion, y, optimizer, config):
     mse_loss = (noise - e_pred).square().mean()
 
     # Compute res_loss for metrics comparison
-    with torch.no_grad():
-        a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
-        a_b = a_b.view(-1, 1, 1, 1, 1)
-        x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
-        eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
-        eq_res_m = torch.mean(torch.abs(eq_residual))
+    a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
+    a_b = a_b.view(-1, 1, 1, 1, 1)
+    x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
+    eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
+    eq_res_m = torch.mean(torch.abs(eq_residual))
         
     coef = mse_loss / eq_res_m
         
@@ -100,13 +97,14 @@ def ddpm_ConFIG_step(dataset, model, diffusion, y, optimizer, config, operator):
     mse_loss = (noise - e_pred).square().mean()
 
     # Compute res_loss for metrics comparison
-    with torch.no_grad():
-        a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
-        a_b = a_b.view(-1, 1, 1, 1, 1)
-        x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
-        eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
-        eq_res_m = torch.mean(torch.abs(eq_residual))
-    
+    a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
+    a_b = a_b.view(-1, 1, 1, 1, 1)
+    x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
+
+    # Ensure tensors are on the correct device and enable gradient tracking
+    eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :]), 2 * math.pi / config.Data.grid_size)
+    eq_res_m = torch.mean(torch.abs(eq_residual))
+
     # ConFIG
     loss_physics_unscaled = eq_res_m.clone()
     mse_loss.backward(retain_graph=True)
@@ -117,7 +115,7 @@ def ddpm_ConFIG_step(dataset, model, diffusion, y, optimizer, config, operator):
 
     operator.update_gradient(model, [grads_1, grads_2])
     optimizer.step()
-    
+
     return mse_loss, loss_physics_unscaled
 
 # Define the training function
@@ -244,7 +242,7 @@ def train_ddpm(config):
             param_group['lr'] = new_lr
 
         # Save checkpoint every 10 epochs
-        if (epoch + 1) % 100 == 0:
+        if (epoch + 1) % 200 == 0:
             checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{mse_loss:.4f}_{val_loss:.4f}.pth")
             torch.save(model.state_dict(), checkpoint_path)
             print(f"Saved checkpoint: {checkpoint_path}")
