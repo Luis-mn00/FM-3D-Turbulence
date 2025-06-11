@@ -14,7 +14,7 @@ Model:
 
 
 Training:
-  method: "std"
+  method: "PINN_dyn"
   epochs: 1000
   batch_size: 4
   learning_rate: 5e-4

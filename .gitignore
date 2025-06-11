@@ -1,6 +1,5 @@
-training.log
-training_ae.log
-training_ddpm.log
+# Ignore training logs
+*.log
 
 # Ignore Python cache files
 __pycache__/

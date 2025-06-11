@@ -252,7 +252,7 @@ def train_flow_matching(config):
             param_group['lr'] = new_lr
 
         # Save checkpoint every 100 epochs
-        if (epoch + 1) % 100 == 0:
+        if (epoch + 1) % 200 == 0:
             checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{mse_loss:.4f}_{val_loss:.4f}.pth")
             torch.save(model.state_dict(), checkpoint_path)
             print(f"Saved checkpoint: {checkpoint_path}")
