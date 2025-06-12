@@ -156,6 +156,7 @@ def train_flow_matching(config):
     print("Starting training...")
     mse_losses = []
     val_losses = []
+    operator = ConFIGOperator(length_model=UniProjectionLength())
     for epoch in range(config.Training.epochs):
         model.train()
         epoch_loss = 0.0
@@ -184,7 +185,6 @@ def train_flow_matching(config):
                 total_loss, loss = PINN_dyn_step(dataset, model, x, y, optimizer, config)
                 
             elif config.Training.method == "ConFIG":
-                operator = ConFIGOperator(length_model=UniProjectionLength())
                 total_loss, loss = ConFIG_step(dataset, model, x, y, optimizer, config, operator)
                 
             else:

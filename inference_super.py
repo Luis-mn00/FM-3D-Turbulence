@@ -61,6 +61,7 @@ def fm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
     residuals_diff = []
     lsim = []
     blurriness = []
+    spectrum = []
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
@@ -68,7 +69,7 @@ def fm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
         y     = samples_y[i].unsqueeze(0).to(config.device)
         noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
 
-        y_pred = fm_interp(model, noise.clone(), x.clone(), steps=100)
+        y_pred = fm_interp(model, noise.clone(), x.clone(), steps=20)
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
@@ -89,11 +90,20 @@ def fm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
         blurr_gt = utils.compute_blurriness(y.cpu().numpy())
         blurriness.append(abs(blurr_pred - blurr_gt))
         
+        y = y.unsqueeze(0)
+        y_pred = y_pred.unsqueeze(0)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
+        diff = np.abs(e_gt - e_pred)
+        diff = np.mean(diff)
+        spectrum.append(diff)
+
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
     
 def fm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1):
     
@@ -103,6 +113,7 @@ def fm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sampl
     residuals_diff = []
     lsim = []
     blurriness = []
+    spectrum = []
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
@@ -143,11 +154,20 @@ def fm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sampl
         blurr_gt = utils.compute_blurriness(y.cpu().numpy())
         blurriness.append(abs(blurr_pred - blurr_gt))
         
+        y = y.unsqueeze(0)
+        y_pred = y_pred.unsqueeze(0)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
+        diff = np.abs(e_gt - e_pred)
+        diff = np.mean(diff)
+        spectrum.append(diff)
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
     
 def fm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044):
     
@@ -157,6 +177,7 @@ def fm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, 
     residuals_diff = []
     lsim = []
     blurriness = []
+    spectrum = []
     
     if samples_ids is not None:
         diffuse_masks = torch.zeros(len(samples_ids), config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
@@ -211,11 +232,20 @@ def fm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, 
         blurr_gt = utils.compute_blurriness(y.cpu().numpy())
         blurriness.append(abs(blurr_pred - blurr_gt))
         
+        y = y.unsqueeze(0)
+        y_pred = y_pred.unsqueeze(0)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
+        diff = np.abs(e_gt - e_pred)
+        diff = np.mean(diff)
+        spectrum.append(diff)
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
 
 # Linear Beta Schedule (from beta_min to beta_max over the T timesteps)
 def get_linear_beta_schedule(T, beta_min=1e-4, beta_max=0.02):
@@ -308,6 +338,7 @@ def ddpm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, s
     residuals_diff = []
     lsim = []
     blurriness = []
+    spectrum = []
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
@@ -336,11 +367,20 @@ def ddpm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, s
         blurr_gt = utils.compute_blurriness(y.cpu().numpy())
         blurriness.append(abs(blurr_pred - blurr_gt))
         
+        y = y.unsqueeze(0)
+        y_pred = y_pred.unsqueeze(0)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
+        diff = np.abs(e_gt - e_pred)
+        diff = np.mean(diff)
+        spectrum.append(diff)
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
     
 def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, t_start=1000, reverse_steps=50, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(T)
@@ -351,6 +391,7 @@ def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
     residuals_diff = []
     lsim = []
     blurriness = []
+    spectrum = []
     
     for i in range(nsamples):
         print(f"Sample {i+1}/{nsamples}")
@@ -391,11 +432,20 @@ def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
         blurr_gt = utils.compute_blurriness(y.cpu().numpy())
         blurriness.append(abs(blurr_pred - blurr_gt))
         
+        y = y.unsqueeze(0)
+        y_pred = y_pred.unsqueeze(0)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
+        diff = np.abs(e_gt - e_pred)
+        diff = np.mean(diff)
+        spectrum.append(diff)
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
     
 def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044, t_start=1000, reverse_steps=50, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(T)
@@ -406,6 +456,7 @@ def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x
     residuals_diff = []
     lsim = []
     blurriness = []
+    spectrum = []
     
     if samples_ids is not None:
         diffuse_masks = torch.zeros(len(samples_ids), config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size).to(config.device)
@@ -460,11 +511,20 @@ def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x
         blurr_gt = utils.compute_blurriness(y.cpu().numpy())
         blurriness.append(abs(blurr_pred - blurr_gt))
         
+        y = y.unsqueeze(0)
+        y_pred = y_pred.unsqueeze(0)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
+        diff = np.abs(e_gt - e_pred)
+        diff = np.mean(diff)
+        spectrum.append(diff)
+        
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
 
 # Main script
 if __name__ == "__main__":
@@ -479,7 +539,7 @@ if __name__ == "__main__":
         print(f"CUDA device name: {torch.cuda.get_device_name(torch.cuda.current_device())}")
     
     print("Loading dataset...")
-    num_samples = 5
+    num_samples = 3
     #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
     dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
                                                     norm=config.Data.norm,
@@ -509,8 +569,8 @@ if __name__ == "__main__":
     model.eval()
     
     fm_interp_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y)
-    fm_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
-    fm_diff_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
-    ddpm_interp_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y)
-    ddpm_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
-    ddpm_diff_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
+    #fm_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
+    #fm_diff_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
+    #ddpm_interp_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y)
+    #ddpm_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
+    #ddpm_diff_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)

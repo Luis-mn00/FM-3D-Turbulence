@@ -16,6 +16,7 @@ from torchfsm.operator import Div
 from torchfsm.mesh import MeshGrid
 from scipy.ndimage import zoom
 from scipy.ndimage import laplace
+import h5py
 
 def dict2namespace(config):
     namespace = argparse.Namespace()
@@ -623,3 +624,144 @@ def visualize_3d_cloud_volume(
         title,
         interactor_style=1, # 1 for TrackballCamera, allows easy navigation
     )
+    
+def compute_energy_spectrum(velocity_tensor, name):
+    N, _, Lx, Ly, Lz = velocity_tensor.shape
+    device = "cpu"
+    # Create wavenumber grids
+    kx = torch.fft.fftfreq(Lx, d=1.0).to(device)
+    ky = torch.fft.fftfreq(Ly, d=1.0).to(device)
+    kz = torch.fft.fftfreq(Lz, d=1.0).to(device)
+    KX, KY, KZ = torch.meshgrid(kx, ky, kz, indexing='ij')
+    K_mag = torch.sqrt(KX**2 + KY**2 + KZ**2).reshape(-1).cpu().numpy()
+
+    # Bin setup
+    k_max = np.max(K_mag)
+    num_bins = min(Lx, Ly, Lz) // 2
+    k_bins = np.linspace(0.0, k_max, num_bins + 1)
+    k_bin_centers = 0.5 * (k_bins[1:] + k_bins[:-1])
+
+    energy_all_snapshots = []
+
+    for n in range(N):
+        #print(f"Processing snapshot {n+1}/{N} for energy spectrum computation...")
+        u, v, w = velocity_tensor[n]
+
+        u_hat = torch.fft.fftn(u).abs()**2
+        v_hat = torch.fft.fftn(v).abs()**2
+        w_hat = torch.fft.fftn(w).abs()**2
+
+        E_k = 0.5 * (u_hat + v_hat + w_hat).reshape(-1).cpu().numpy()
+
+        E_spectrum, _ = np.histogram(K_mag, bins=k_bins, weights=E_k)
+        counts, _ = np.histogram(K_mag, bins=k_bins)
+
+        E_spectrum = E_spectrum / np.maximum(counts, 1)
+        energy_all_snapshots.append(E_spectrum)
+
+    # Average across snapshots
+    E_avg = np.mean(energy_all_snapshots, axis=0)
+
+    # Normalize k_bin_centers to start at 1
+    k_bin_centers = k_bin_centers / k_bin_centers[0]
+
+    # Normalize E_avg so the maximum value is 1
+    E_avg = E_avg / np.max(E_avg)
+
+    # Plot
+    plt.figure(figsize=(8, 5))
+    plt.loglog(k_bin_centers, E_avg + 1e-20, label="Normalized Energy Spectrum")
+    plt.xlabel("Wavenumber $k$")
+    plt.ylabel("Energy $E(k)$")
+    plt.title("Normalized Isotropic Energy Spectrum")
+    plt.grid(True, which="both", ls="--", lw=0.5)
+    plt.legend()
+    plt.tight_layout()
+    output_file = f"generated_plots/{name}.png"
+    plt.savefig(output_file)
+    
+    return E_avg
+    
+def compute_energy_spectrum_original(file_path: str, name: str):
+    device = "cpu"
+    energy_all_snapshots = []
+    k_bin_centers = None  # Will be set inside loop
+
+    with h5py.File(file_path, 'r') as f:
+        keys = list(f['sims']['sim0'].keys())[:50]  # Only first 5
+        print(f"Found {len(keys)} snapshots.")
+
+        for i, key in enumerate(keys):
+            print(f"\n📦 Processing snapshot {i+1}/{len(keys)}: {key}")
+            sample = f['sims']['sim0'][key]
+            sample = np.transpose(sample, (3, 0, 1, 2))[:3]  # (3, 512, 512, 512)
+
+            # Convert to torch tensor
+            velocity_tensor = torch.from_numpy(sample).float().to(device)
+            _, Lx, Ly, Lz = velocity_tensor.shape
+
+            if torch.all(velocity_tensor == 0):
+                print("⚠️ Warning: Snapshot contains only zeros. Skipping.")
+                continue
+
+            # FFT frequency grids
+            kx = torch.fft.fftfreq(Lx, d=1.0).to(device)
+            ky = torch.fft.fftfreq(Ly, d=1.0).to(device)
+            kz = torch.fft.fftfreq(Lz, d=1.0).to(device)
+            KX, KY, KZ = torch.meshgrid(kx, ky, kz, indexing='ij')
+            K_mag = torch.sqrt(KX**2 + KY**2 + KZ**2).reshape(-1).cpu().numpy()
+
+            # FFT and energy spectrum
+            u, v, w = velocity_tensor
+            u_hat = torch.fft.fftn(u).abs()**2
+            v_hat = torch.fft.fftn(v).abs()**2
+            w_hat = torch.fft.fftn(w).abs()**2
+            E_k = 0.5 * (u_hat + v_hat + w_hat).reshape(-1).cpu().numpy()
+
+            # Avoid nan due to empty bins
+            num_bins = min(Lx, Ly, Lz) // 2
+            k_bins = np.linspace(0.0, np.max(K_mag), num_bins + 1)
+            k_bin_centers = 0.5 * (k_bins[1:] + k_bins[:-1])
+
+            E_spectrum, _ = np.histogram(K_mag, bins=k_bins, weights=E_k)
+            counts, _ = np.histogram(K_mag, bins=k_bins)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                E_spectrum = np.where(counts > 0, E_spectrum / counts, 0.0)
+
+            energy_all_snapshots.append(E_spectrum)
+
+    # Stack and compute average
+    if len(energy_all_snapshots) == 0:
+        print("❌ No valid energy data collected. Exiting.")
+        return
+
+    E_avg = np.mean(energy_all_snapshots, axis=0)
+
+    if np.all(np.isnan(E_avg)) or np.max(E_avg) == 0:
+        print("❌ E_avg contains only NaN or zeros. Cannot normalize.")
+        return
+
+    # Normalize and truncate
+    k_bin_centers = k_bin_centers / k_bin_centers[0]
+    E_avg = E_avg / np.max(E_avg)
+
+    max_valid_k = min(Lx, Ly, Lz) // 2
+    valid = k_bin_centers <= max_valid_k
+    k_bin_centers = k_bin_centers[valid]
+    E_avg = E_avg[valid]
+
+    # Plot
+    plt.figure(figsize=(8, 5))
+    plt.loglog(k_bin_centers, E_avg + 1e-20, label="Normalized Energy Spectrum")
+    plt.xlabel("Wavenumber $k$")
+    plt.ylabel("Energy $E(k)$")
+    plt.title("Normalized Energy Spectrum from HDF5")
+    plt.grid(True, which="both", ls="--", lw=0.5)
+    plt.legend()
+    plt.tight_layout()
+
+    os.makedirs("generated_plots", exist_ok=True)
+    output_file = f"generated_plots/{name}.png"
+    plt.savefig(output_file)
+    plt.close()
+    print(f"✅ Saved spectrum plot to: {output_file}")

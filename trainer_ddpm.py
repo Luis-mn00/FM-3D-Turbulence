@@ -20,7 +20,7 @@ wandb.login(key="f4a726b2fe7929990149e82fb88da423cfa74e46")
 
 wandb.init(project="ddpm")
 
-def ddpm_standard_step(dataset, model, diffusion, y, optimizer, config):
+def ddpm_standard_step(dataset, model, diffusion, y, optimizer, config, accumulation_steps, batch_idx, length):
     batch_size = y.shape[0]
     t = torch.randint(0, diffusion.num_timesteps, size=(batch_size,), device=y.device)
 
@@ -29,19 +29,24 @@ def ddpm_standard_step(dataset, model, diffusion, y, optimizer, config):
     e_pred = e_pred.sample
     mse_loss = (noise - e_pred).square().mean()
 
-    mse_loss.backward()
-    optimizer.step()
-
     # Compute res_loss for metrics comparison
     a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
     a_b = a_b.view(-1, 1, 1, 1, 1)
     x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
     eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
     eq_res_m = torch.mean(torch.abs(eq_residual))
+    
+    total_loss = mse_loss
+    total_loss = total_loss / accumulation_steps
+    total_loss.backward() 
+
+    if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == length:
+        optimizer.step()
+        optimizer.zero_grad()
 
     return mse_loss, eq_res_m
 
-def ddpm_PINN_step(dataset, model, diffusion, y, optimizer, config):
+def ddpm_PINN_step(dataset, model, diffusion, y, optimizer, config, accumulation_steps, batch_idx, length):
     batch_size = y.shape[0]
     t = torch.randint(0, diffusion.num_timesteps, size=(batch_size,), device=y.device)
 
@@ -58,12 +63,16 @@ def ddpm_PINN_step(dataset, model, diffusion, y, optimizer, config):
     eq_res_m = torch.mean(torch.abs(eq_residual))
         
     total_loss = mse_loss + config.Training.ddpm_loss_weight * eq_res_m
-    total_loss.backward()
-    optimizer.step()
+    total_loss = total_loss / accumulation_steps
+    total_loss.backward() 
+
+    if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == length:
+        optimizer.step()
+        optimizer.zero_grad()
 
     return mse_loss, eq_res_m
 
-def ddpm_PINN_dyn_step(dataset, model, diffusion, y, optimizer, config):
+def ddpm_PINN_dyn_step(dataset, model, diffusion, y, optimizer, config, accumulation_steps, batch_idx, length):
     batch_size = y.shape[0]
     t = torch.randint(0, diffusion.num_timesteps, size=(batch_size,), device=y.device)
 
@@ -82,12 +91,16 @@ def ddpm_PINN_dyn_step(dataset, model, diffusion, y, optimizer, config):
     coef = mse_loss / eq_res_m
         
     total_loss = mse_loss + coef * eq_res_m
-    total_loss.backward()
-    optimizer.step()
+    total_loss = total_loss / accumulation_steps
+    total_loss.backward() 
+
+    if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == length:
+        optimizer.step()
+        optimizer.zero_grad()
 
     return mse_loss, eq_res_m
 
-def ddpm_ConFIG_step(dataset, model, diffusion, y, optimizer, config, operator):
+def ddpm_ConFIG_step(dataset, model, diffusion, y, optimizer, config, operator, accumulation_steps, batch_idx, length):
     batch_size = y.shape[0]
     t = torch.randint(0, diffusion.num_timesteps, size=(batch_size,), device=y.device)
 
@@ -95,6 +108,7 @@ def ddpm_ConFIG_step(dataset, model, diffusion, y, optimizer, config, operator):
     e_pred = model(x_t, t)
     e_pred = e_pred.sample
     mse_loss = (noise - e_pred).square().mean()
+    mse_loss = mse_loss / accumulation_steps
 
     # Compute res_loss for metrics comparison
     a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
@@ -104,17 +118,20 @@ def ddpm_ConFIG_step(dataset, model, diffusion, y, optimizer, config, operator):
     # Ensure tensors are on the correct device and enable gradient tracking
     eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :]), 2 * math.pi / config.Data.grid_size)
     eq_res_m = torch.mean(torch.abs(eq_residual))
+    eq_res_m = eq_res_m / accumulation_steps
 
     # ConFIG
     loss_physics_unscaled = eq_res_m.clone()
     mse_loss.backward(retain_graph=True)
     grads_1 = get_gradient_vector(model, none_grad_mode="skip")
-    optimizer.zero_grad()
+    #optimizer.zero_grad()
     eq_res_m.backward()
     grads_2 = get_gradient_vector(model, none_grad_mode="skip")
 
     operator.update_gradient(model, [grads_1, grads_2])
-    optimizer.step()
+    if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == length:
+        optimizer.step()
+        optimizer.zero_grad()
 
     return mse_loss, loss_physics_unscaled
 
@@ -122,8 +139,6 @@ def ddpm_ConFIG_step(dataset, model, diffusion, y, optimizer, config, operator):
 def train_ddpm(config):
     # Load the dataset
     print("Loading dataset...")
-    #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size)
-    #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=config.Data.size, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=config.Training.batch_size, grid_size=config.Data.grid_size)
     dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
                                                     norm=config.Data.norm,
                                                     size=config.Data.size,
@@ -132,12 +147,12 @@ def train_ddpm(config):
                                                     test_ratio=0.1,
                                                     batch_size=config.Training.batch_size,
                                                     num_samples=10)
-    
+
     # Update the dataloaders
     train_loader = dataset.train_loader
     val_loader = dataset.val_loader
     test_loader = dataset.test_loader
-    
+
     # Diffusion parameters
     diffusion = Diffusion(config)
 
@@ -178,38 +193,40 @@ def train_ddpm(config):
     print("Starting training...")
     mse_losses = []
     val_losses = []
+
+    # Gradient accumulation steps
+    accumulation_steps = config.Training.effective_batch_size // config.Training.batch_size
+    optimizer.zero_grad()
+    operator = ConFIGOperator(length_model=UniProjectionLength())
+    
     for epoch in range(config.Training.epochs):
         model.train()
         mse_loss = 0.0
 
         # Get the next batch from the train_loader
         for batch_idx, x1 in enumerate(train_loader):
-            #print(f"Batch {batch_idx+1}/{len(train_loader)}")
-            optimizer.zero_grad()
-            
+            #print(f"Processing batch {batch_idx + 1}/{len(train_loader)}")
+            if batch_idx % accumulation_steps == 0:
+                optimizer.zero_grad()
+
             # Ensure all elements in the batch are tensors
             x1 = torch.tensor(x1) if isinstance(x1, np.ndarray) else x1
             x1 = x1.to(config.device)
-            
+
             # Perform the training step
             if config.Training.method == "std":
-                loss, physics_loss = ddpm_standard_step(dataset, model, diffusion, x1, optimizer, config)
-                
+                loss, physics_loss = ddpm_standard_step(dataset, model, diffusion, x1, optimizer, config, accumulation_steps, batch_idx, len(train_loader))
             elif config.Training.method == "PINN":
-                loss, physics_loss = ddpm_PINN_step(dataset, model, diffusion, x1, optimizer, config)
-                
+                loss, physics_loss = ddpm_PINN_step(dataset, model, diffusion, x1, optimizer, config, accumulation_steps, batch_idx, len(train_loader))
             elif config.Training.method == "PINN_dyn":
-                loss, physics_loss = ddpm_PINN_dyn_step(dataset, model, diffusion, x1, optimizer, config)
-                
+                loss, physics_loss = ddpm_PINN_dyn_step(dataset, model, diffusion, x1, optimizer, config, accumulation_steps, batch_idx, len(train_loader))
             elif config.Training.method == "ConFIG":
-                operator = ConFIGOperator(length_model=UniProjectionLength())
-                loss, physics_loss = ddpm_ConFIG_step(dataset, model, diffusion, x1, optimizer, config, operator)
-                
+                loss, physics_loss = ddpm_ConFIG_step(dataset, model, diffusion, x1, optimizer, config, operator, accumulation_steps, batch_idx, len(train_loader))
             else:
                 raise ValueError(f"Unknown training method: {config.Training.method}")
             
-            mse_loss += loss.item()
-            
+            mse_loss += loss.item() * accumulation_steps
+
         mse_loss /= len(train_loader)
         mse_losses.append(mse_loss)
 
@@ -225,10 +242,10 @@ def train_ddpm(config):
                 e_pred = model(x_t, t)
                 e_pred = e_pred.sample
                 val_loss += (noise - e_pred).square().mean()
-                
+
         val_loss /= len(val_loader)
         val_losses.append(val_loss)
-        
+
         wandb.log({
             "epoch": epoch+1,
             "train_loss": mse_loss,
@@ -249,7 +266,7 @@ def train_ddpm(config):
 
         # Log the epoch loss and validation loss
         print(f"Epoch [{epoch + 1}/{config.Training.epochs}], Loss: {mse_loss:.4f}, Validation Loss: {val_loss:.4f}")
-        
+
     wandb.finish()
 
     # Plot losses after training

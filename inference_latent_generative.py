@@ -199,7 +199,22 @@ def test_blurriness(samples, samples_gt, config):
 
     mean_blurriness = np.mean(blurriness)
     std_blurriness = np.std(blurriness)
-    print(f"Blurriness: {mean_blurriness:.4f} +/- {std_blurriness:.4f}")
+    print(f"Sharpness: {mean_blurriness:.4f} +/- {std_blurriness:.4f}")
+    
+def test_energy_spectrum(samples, samples_gt, config):
+    e_gt = utils.compute_energy_spectrum(samples_gt, f"energy_gt")
+    
+    # Ensure samples are converted to a tensor before passing to compute_energy_spectrum
+    samples_tensor = torch.stack([s.squeeze(0) for s in samples])
+    e_fm = utils.compute_energy_spectrum(samples_tensor, f"energy_fm")
+    
+    # Convert e_gt and e_fm to tensors before applying torch.abs
+    e_gt_tensor = torch.tensor(e_gt, device=config.device)
+    e_fm_tensor = torch.tensor(e_fm, device=config.device)
+
+    diff = torch.abs(e_gt_tensor - e_fm_tensor)
+    print(f"Energy spectrum difference: {torch.mean(diff):.6f} +/- {torch.std(diff):.6f}")
+
 
 if __name__ == "__main__":
     # Load the configuration
@@ -245,6 +260,8 @@ if __name__ == "__main__":
     residual_of_generated(dataset, samples_fm, samples_gt, config)
     test_wasserstein(samples_fm, samples_gt, config)
     test_blurriness(samples_fm, samples_gt, config)
+    test_energy_spectrum(samples_fm, samples_gt, config)
     residual_of_generated(dataset, samples_ddim, samples_gt, config)
     test_wasserstein(samples_ddim, samples_gt, config)
     test_blurriness(samples_ddim, samples_gt, config)
+    test_energy_spectrum(samples_ddim, samples_gt, config)

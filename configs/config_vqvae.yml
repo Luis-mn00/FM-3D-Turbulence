@@ -6,18 +6,17 @@ Data:
 Model:
   in_channels: 3
   hidden_size: 256
-  depth: 3
+  depth: 2
   num_res_block: 2
   res_size: 32
   z_dim: 16
   ae_path: "runs/118/epoch_100_31.9642_32.2917.pth"
   
-
 Training:
   epochs: 1000
-  batch_size: 4
+  batch_size: 5
   learning_rate: 1e-3
   gamma: 0.995
   last_lr: 1e-5
 
-device: "cuda:2"
+device: "cuda:1"

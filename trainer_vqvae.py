@@ -15,7 +15,6 @@ from conflictfree.utils import get_gradient_vector
 from conflictfree.grad_operator import ConFIGOperator
 
 from model_vqvae import VQVAE, VAE, AE
-from loss import schedule_KL_annealing
 from dataset import IsotropicTurbulenceDataset, BigIsotropicTurbulenceDataset, BigSpectralIsotropicTurbulenceDataset
 import utils
 from my_config_length import UniProjectionLength
@@ -66,8 +65,6 @@ def train_ae(config):
     # Convert learning_rate and divergence_loss_weight to float if they are strings
     if isinstance(config.Training.learning_rate, str):
         config.Training.learning_rate = float(config.Training.learning_rate)
-    if isinstance(config.Training.divergence_loss_weight, str):
-        config.Training.divergence_loss_weight = float(config.Training.divergence_loss_weight)
     if isinstance(config.Training.gamma, str):
         config.Training.gamma = float(config.Training.gamma)
     if isinstance(config.Training.last_lr, str):
@@ -140,17 +137,14 @@ def train_ae(config):
             current_lr = param_group['lr']
             new_lr = max(current_lr * config.Training.gamma, config.Training.last_lr)
             param_group['lr'] = new_lr
-
-        # Save checkpoint every 10 epochs
-        if (epoch + 1) % 100 == 0:
-            checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{total_loss:.4f}_{val_loss:.4f}.pth")
-            torch.save(model.state_dict(), checkpoint_path)
-            print(f"Saved checkpoint: {checkpoint_path}")
             
         # Log the epoch loss and validation loss
         print(f"Epoch [{epoch + 1}/{config.Training.epochs}], Loss: {total_loss:.4f}, Validation Loss: {val_loss:.4f}")
 
-        
+    checkpoint_path = os.path.join(run_dir, f"epoch_{epoch+1}_{total_loss:.4f}_{val_loss:.4f}.pth")
+    torch.save(model.state_dict(), checkpoint_path)
+    print(f"Saved checkpoint: {checkpoint_path}")
+    
     wandb.finish()
 
     # Plot losses after training

@@ -224,8 +224,10 @@ dataset_optim = torch.load(f'data/data_spectral_128_mindiv.pt', weights_only=Fal
 if isinstance(dataset_optim, np.ndarray):
     dataset_optim = torch.from_numpy(dataset_optim)
 
-velocity = dataset_optim[0].unsqueeze(0)
+velocity = dataset_optim[:10, :3, :, :, :]
 print(velocity.shape)
 
-blurr = utils.compute_blurriness(velocity)
-print(blurr)
+utils.compute_energy_spectrum(velocity, "energy")
+
+
+utils.compute_energy_spectrum_original("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", "energy_original")

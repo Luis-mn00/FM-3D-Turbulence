@@ -14,6 +14,7 @@ Training:
   method: "std"
   epochs: 1000
   batch_size: 4
+  effective_batch_size: 8
   learning_rate: 5e-4
   divergence_loss_weight: 1e-3
   sigma_min: 0.0
