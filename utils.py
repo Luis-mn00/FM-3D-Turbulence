@@ -303,7 +303,7 @@ def LSiM_distance_3D(A, B):
     B = B.squeeze(0)
     B = B.permute(1, 2, 3, 0)
     B = B.cpu().numpy()
-    model_3d = DistanceModel.load("LSIM_3D/models/VolSiM.pth")
+    model_3d = DistanceModel.load("LSIM_3D/models/VolSiM.pth", useGPU=False)
     dist = model_3d.computeDistance(A, B, normalize=True, interpolate=False)
     
     return dist[0]

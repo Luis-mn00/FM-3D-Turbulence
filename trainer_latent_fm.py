@@ -34,81 +34,6 @@ def fm_standard_step(model, xt, t, target, optimizer, config):
     
     return total_loss, loss
 
-def fm_PINN_step(dataset, model, xt, t, target, optimizer, config):
-    # Forward pass
-    pred = model(xt, t)
-    pred = pred.sample
-    loss = ((target - pred) ** 2).mean()
-    
-    x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
-
-    # Compute the divergence-free loss
-    divergence = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
-    divergence_loss = torch.mean(torch.abs(divergence))
-    #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
-
-    # Combine the flow matching loss and the divergence-free loss
-    total_loss = loss + config.Training.divergence_loss_weight * divergence_loss
-    
-    # Backward pass and optimization
-    optimizer.zero_grad()
-    total_loss.backward()
-    optimizer.step()
-    
-    return total_loss, loss
-
-def fm_PINN_dyn_step(dataset, model, xt, t, target, optimizer, config):
-    # Forward pass
-    pred = model(xt, t)
-    pred = pred.sample
-    loss = ((target - pred) ** 2).mean()
-    
-    x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
-
-    # Compute the divergence-free loss
-    divergence = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
-    divergence_loss = torch.mean(torch.abs(divergence))
-    #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
-
-    # Combine the flow matching loss and the divergence-free loss
-    coef = loss / divergence_loss
-    total_loss = loss + coef * divergence_loss
-    
-    # Backward pass and optimization
-    optimizer.zero_grad()
-    total_loss.backward()
-    optimizer.step()
-    
-    return total_loss, loss
-
-def fm_ConFIG_step(dataset, model, xt, t, target, optimizer, config, operator):
-    # Forward pass
-    pred = model(xt, t)
-    pred = pred.sample
-    loss = ((target - pred) ** 2).mean()
-    
-    x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
-
-    # Compute the divergence-free loss
-    divergence = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
-    divergence_loss = torch.mean(torch.abs(divergence))
-    #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
-    
-    # ConFIG
-    loss_physics_unscaled = divergence_loss.clone()
-    loss.backward(retain_graph=True)
-    grads_1 = get_gradient_vector(model, none_grad_mode="skip")
-    optimizer.zero_grad()
-    divergence_loss.backward()
-    grads_2 = get_gradient_vector(model, none_grad_mode="skip")
-
-    operator.update_gradient(model, [grads_1, grads_2])
-    optimizer.step()
-    
-    total_loss = loss + config.Training.divergence_loss_weight * divergence_loss
-    
-    return total_loss, loss
-
 # Define the training function
 def train_flow_matching(config, config_ae):
     # Load the dataset
@@ -167,9 +92,7 @@ def train_flow_matching(config, config_ae):
     # Load the pre-trained autoencoder
     #model = VQVAE(input_size=config.Model.in_channels, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
     #             num_embedding=config.Model.num_embedding, device=config.device).to(config.device)
-    #model = AE(input_size=config.Model.in_channels, image_size=config.Data.grid_size, hidden_size=config.Model.hidden_size, depth=config.Model.depth, num_res_block=config.Model.num_res_block, res_size=config.Model.res_size, embedding_size=config.Model.embedding_size,
-    #            device=config.device, z_dim=config.Model.z_dim).to(config.device)
-    ae = VAE(input_size=config_ae.Model.in_channels,
+    ae = AE(input_size=config_ae.Model.in_channels,
                image_size=config_ae.Data.grid_size,
                hidden_size=config_ae.Model.hidden_size,
                depth=config_ae.Model.depth,
@@ -177,6 +100,14 @@ def train_flow_matching(config, config_ae):
                res_size=config_ae.Model.res_size,
                device=config.device,
                z_dim=config_ae.Model.z_dim).to(config.device)
+    #ae = VAE(input_size=config_ae.Model.in_channels,
+    #           image_size=config_ae.Data.grid_size,
+    #           hidden_size=config_ae.Model.hidden_size,
+    #           depth=config_ae.Model.depth,
+    #           num_res_block=config_ae.Model.num_res_block,
+    #           res_size=config_ae.Model.res_size,
+    #           device=config.device,
+    #           z_dim=config_ae.Model.z_dim).to(config.device)
     ae.load_state_dict(torch.load(config_ae.Model.ae_path, map_location=config.device))
     ae.eval()
     for param in ae.parameters():
@@ -200,12 +131,12 @@ def train_flow_matching(config, config_ae):
 
             # Encode to latent space
             with torch.no_grad():
-                #z1 = ae.encode(x1)
-                #z0 = ae.encode(x0)
-                mu1, logvar1 = ae.encode(x1)
-                mu0, logvar0 = ae.encode(x0)
-                z1 = ae.reparameterize(mu1, logvar1)
-                z0 = ae.reparameterize(mu0, logvar0)
+                z1 = ae.encode(x1)
+                z0 = ae.encode(x0)
+                #mu1, logvar1 = ae.encode(x1)
+                #mu0, logvar0 = ae.encode(x0)
+                #z1 = ae.reparameterize(mu1, logvar1)
+                #z0 = ae.reparameterize(mu0, logvar0)
                 
 
             #print(z1.shape)
@@ -230,12 +161,12 @@ def train_flow_matching(config, config_ae):
                 x0 = torch.randn_like(x1)
                 x1 = x1.to(config.device)
                 x0 = x0.to(config.device)
-                #z1 = ae.encode(x1)
-                #z0 = ae.encode(x0)
-                mu1, logvar1 = ae.encode(x1)
-                mu0, logvar0 = ae.encode(x0)
-                z1 = ae.reparameterize(mu1, logvar1)
-                z0 = ae.reparameterize(mu0, logvar0)
+                z1 = ae.encode(x1)
+                z0 = ae.encode(x0)
+                #mu1, logvar1 = ae.encode(x1)
+                #mu0, logvar0 = ae.encode(x0)
+                #z1 = ae.reparameterize(mu1, logvar1)
+                #z0 = ae.reparameterize(mu0, logvar0)
                 target = z1 - (1 - config.Training.sigma_min) * z0
                 t = torch.rand(z1.size(0), device=config.device)
                 zt = (1 - (1 - config.Training.sigma_min) * t[:, None, None, None, None]) * z0 + t[:, None, None, None, None] * z1

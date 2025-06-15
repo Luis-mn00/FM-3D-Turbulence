@@ -44,7 +44,7 @@ def load_ae_model(config):
     return ae
 
 # Integrate ODE and generate samples
-def integrate_ode_and_sample_latent(config, config_ae, model, ae, num_samples=1, steps=10):
+def integrate_ode_and_sample_latent(config, config_ae, model, ae, num_samples=1, steps=100):
     model.eval().requires_grad_(False)
 
     samples = []
@@ -236,7 +236,7 @@ if __name__ == "__main__":
     ae = load_ae_model(config_ae)
 
     print("Generating samples (latent FM)...")
-    num_samples = 10
+    num_samples = 50
     #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config_ae.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
     #dataset = BigIsotropicTurbulenceDataset("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", sim_group='sim0', norm=True, size=None, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, batch_size=5, num_samples=num_samples, test=True, grid_size=config.Data.grid_size)
     dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config_ae.Data.grid_size,
@@ -253,15 +253,15 @@ if __name__ == "__main__":
     for i, sample in enumerate(samples_fm):
         utils.plot_slice(sample, 0, 1, 63, f"generated_latent_sample_{i}")
 
-    samples_ddim = generate_samples_with_denoiser_latent(config, config_ae, model, ae, num_samples, t_start=1000, reverse_steps=20, T=1000)
-    for i, sample in enumerate(samples_ddim):
-        utils.plot_slice(sample, 0, 1, 63, f"generated_latent_sample_diff_{i}")
+    #samples_ddim = generate_samples_with_denoiser_latent(config, config_ae, model, ae, num_samples, t_start=1000, reverse_steps=100, T=1000)
+    #for i, sample in enumerate(samples_ddim):
+    #    utils.plot_slice(sample, 0, 1, 63, f"generated_latent_sample_diff_{i}")
 
     residual_of_generated(dataset, samples_fm, samples_gt, config)
     test_wasserstein(samples_fm, samples_gt, config)
     test_blurriness(samples_fm, samples_gt, config)
     test_energy_spectrum(samples_fm, samples_gt, config)
-    residual_of_generated(dataset, samples_ddim, samples_gt, config)
-    test_wasserstein(samples_ddim, samples_gt, config)
-    test_blurriness(samples_ddim, samples_gt, config)
-    test_energy_spectrum(samples_ddim, samples_gt, config)
+    #residual_of_generated(dataset, samples_ddim, samples_gt, config)
+    #test_wasserstein(samples_ddim, samples_gt, config)
+    #test_blurriness(samples_ddim, samples_gt, config)
+    #test_energy_spectrum(samples_ddim, samples_gt, config)

@@ -10,7 +10,8 @@ Model:
   num_res_block: 2
   res_size: 32
   z_dim: 16
-  ae_path: "runs/118/epoch_100_31.9642_32.2917.pth"
+  ae_path: "runs/007/epoch_1000_18.9396_19.2390.pth" # VAE 12
+  #ae_path: "runs/011/epoch_1000_18.6367_18.9378.pth" # AE 12
   
 Training:
   epochs: 1000

@@ -8,8 +8,8 @@ Model:
   channel_size_out: 3  
   partition_size: [1, 1, 1]  
   drop_class_labels: True  
-  save_path: "runs/001/epoch_1000_0.2174_0.2236.pth" # std, sigma 0
-  #save_path: "runs/005/epoch_800_0.1941_0.2002.pth" # std, sigma 0.01
+  #save_path: "runs/001/epoch_1000_0.2174_0.2236.pth" # std, sigma 0
+  save_path: "runs/005/epoch_1000_0.2170_0.2325.pth" # std, sigma 0.01
   #save_path: "runs/006/epoch_1000_0.2077_0.2025.pth" # std, sigma 0.001
 
 
@@ -24,4 +24,4 @@ Training:
   gamma: 0.995
   last_lr: 1e-5
 
-device: "cpu"
+device: "cuda:2"

@@ -15,7 +15,7 @@ plot_folder = "generated_plots"
 os.makedirs(plot_folder, exist_ok=True)
 
 # Integrate ODE and generate samples
-def integrate_ode_and_sample(config, model, num_samples=1, steps=10):
+def integrate_ode_and_sample(config, model, num_samples=1, steps=100):
     model.eval().requires_grad_(False)
 
     samples = []
@@ -177,7 +177,7 @@ def test_energy_spectrum(samples, samples_gt, config):
     e_fm_tensor = torch.tensor(e_fm, device=config.device)
 
     diff = torch.abs(e_gt_tensor - e_fm_tensor)
-    print(f"Energy spectrum difference: {torch.mean(diff):.6f} +/- {torch.std(diff):.6f}")
+    print(f"Energy spectrum difference: {torch.mean(diff):.4e} +/- {torch.std(diff):.4e}")
 
 if __name__ == "__main__":
     # Load the configuration
@@ -201,7 +201,7 @@ if __name__ == "__main__":
     model.eval()
 
     # Generate samples using ODE integration
-    num_samples = 5
+    num_samples = 50
     #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, num_samples=num_samples, field=None)
     dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
                                                     norm=config.Data.norm,
@@ -216,7 +216,7 @@ if __name__ == "__main__":
         utils.plot_slice(samples_gt, i, 1, 63, f"gt_sample_{i}")
     
     print("Generating samples...")
-    samples_fm = integrate_ode_and_sample(config, model, num_samples=num_samples, steps=20)
+    samples_fm = integrate_ode_and_sample(config, model, num_samples=num_samples, steps=100)
     for i, sample in enumerate(samples_fm):
         utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
         

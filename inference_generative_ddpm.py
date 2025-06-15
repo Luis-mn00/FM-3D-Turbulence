@@ -135,7 +135,7 @@ def test_energy_spectrum(samples, samples_gt, config):
     e_fm_tensor = torch.tensor(e_fm, device=config.device)
 
     diff = torch.abs(e_gt_tensor - e_fm_tensor)
-    print(f"Energy spectrum difference: {torch.mean(diff):.6f} +/- {torch.std(diff):.6f}")
+    print(f"Energy spectrum difference: {torch.mean(diff):.4e} +/- {torch.std(diff):.4e}")
 
 if __name__ == "__main__":
     # Load the configuration

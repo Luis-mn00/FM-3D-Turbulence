@@ -59,7 +59,7 @@ class Diffusion():
         x = x_inp
 
         for i in reversed(range(t_start)):
-            print(f"Step {i}/{t_start}")
+            #print(f"Step {i}/{t_start}")
             t = (torch.ones(n) * i).to(x.device)
             b = self.betas[i]
             a = self.alphas[i]
@@ -87,7 +87,7 @@ class Diffusion():
             b = self.betas[i]
             a = self.alphas[i]
             a_b = self.alphas_b[i]
-            e = model(x, t)
+            e = model(x, t).sample
             
             s_m = self.mask_schedule[i]
             
@@ -122,7 +122,7 @@ class Diffusion():
                 b = self.betas[i]
                 a = self.alphas[i]
                 a_b = self.alphas_b[i]
-                e = model(x, t)
+                e = model(x, t).sample
 
                 x = (1 / a.sqrt()) * (x - (b / (1 - a_b).sqrt()) * e) 
 
@@ -140,6 +140,7 @@ class Diffusion():
         n = x.size(0)
         
         for i, j in zip(reversed(seq), reversed(next_seq)):
+            #print(f"Step {i}/{t_start}")
             t = (torch.ones(n) * i).to(x.device)
             a_b = self.alphas_b[i]
             a_next_b = self.alphas_b[j] if i > 0 else torch.ones(1, device=x.device)
@@ -168,11 +169,12 @@ class Diffusion():
             n = x.size(0)
             
             for i, j in zip(reversed(seq), reversed(next_seq)):
+                #print(f"Step {i}/{t_start}, Iteration {it+1}/{K}")
                 t = (torch.ones(n) * i).to(x.device)
                 a_b = self.alphas_b[i]
                 a_next_b = self.alphas_b[j] if i > 0 else torch.ones(1, device=x.device)
 
-                e = model(x, t)
+                e = model(x, t).sample
 
                 x0_pred = (x - e * (1 - a_b).sqrt()) / a_b.sqrt()
                 x = a_next_b.sqrt() * x0_pred + (1 - a_next_b).sqrt() * e
@@ -198,7 +200,7 @@ class Diffusion():
             t = (torch.ones(n) * i).to(x.device)
             a_b = self.alphas_b[i]
             a_next_b = self.alphas_b[j] if i > 0 else torch.ones(1, device=x.device)
-            e = model(x, t)
+            e = model(x, t).sample
             x0_pred = (x - e * (1 - a_b).sqrt()) / a_b.sqrt()
 
             mask_t = mask * self.mask_schedule[i]
@@ -206,4 +208,4 @@ class Diffusion():
 
             x = a_next_b.sqrt() * x_masked + (1 - a_next_b).sqrt() * e
                 
-        return x, mask
+        return x

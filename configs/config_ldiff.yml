@@ -1,0 +1,29 @@
+Data:
+  grid_size: 32
+  norm: true
+  size: 500
+
+Model:
+  channel_size: 16  
+  channel_size_out: 16 
+  partition_size: [1, 1, 1]  
+  drop_class_labels: True  
+  save_path: "runs/012/epoch_2000_0.2535_0.2718.pth" # std VAE 12
+  #save_path: "runs/012/epoch_2000_0.2535_0.2718.pth" # std AE 12
+
+Training:
+  method: "std"
+  epochs: 2000
+  batch_size: 8
+  learning_rate: 5e-4
+  gamma: 0.995
+  last_lr: 1e-5
+
+Diffusion:
+  beta_schedule: linear
+  num_diffusion_timesteps: 1000
+  beta_start: 0.0001
+  beta_end: 0.02
+  mask_schedule_sig: 3
+
+device: "cuda:1"

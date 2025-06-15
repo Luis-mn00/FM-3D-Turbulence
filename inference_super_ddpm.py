@@ -102,7 +102,7 @@ def ddpm_interp_sparse_experiment(dataset, config, diffusion, model, nsamples, s
         y     = samples_y[i].unsqueeze(0).to(config.device)
         noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
         
-        y_pred = diffusion.ddim_article(noise.clone(), model, t_start, reverse_steps)
+        y_pred = diffusion.ddim_article(x, model, t_start, reverse_steps)
         #y_pred = ddim_interp(model, noise.clone(), x.clone(), t_start, reverse_steps, betas, alphas_cumprod)
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
@@ -137,7 +137,7 @@ def ddpm_interp_sparse_experiment(dataset, config, diffusion, model, nsamples, s
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
-    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4f} +/- {np.std(spectrum):.4f}")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
     
 def ddpm_mask_sparse_experiment(dataset, config, diffusion, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, t_start=1000, reverse_steps=20, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(config.Diffusion.num_diffusion_timesteps, config.Diffusion.beta_start, config.Diffusion.beta_end)
@@ -203,7 +203,7 @@ def ddpm_mask_sparse_experiment(dataset, config, diffusion, model, nsamples, sam
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
-    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4f} +/- {np.std(spectrum):.4f}")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
     
 def ddpm_diff_mask_sparse_experiment(dataset, config, diffusion, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044, t_start=1000, reverse_steps=20, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(config.Diffusion.num_diffusion_timesteps, config.Diffusion.beta_start, config.Diffusion.beta_end)
@@ -283,7 +283,7 @@ def ddpm_diff_mask_sparse_experiment(dataset, config, diffusion, model, nsamples
     print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
     print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
     print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
-    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4f} +/- {np.std(spectrum):.4f}")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
 
 # Main script
 if __name__ == "__main__":
@@ -319,7 +319,7 @@ if __name__ == "__main__":
     model = model.to(config.device)
     model.eval()
     samples_y = dataset.test_dataset
-    perc = 20
+    perc = 5
     samples_x, samples_ids = utils.interpolate_dataset(samples_y, perc/100)
     #samples_x = utils.downscale_data(samples_y, 4)
     #samples_ids = None
@@ -327,6 +327,6 @@ if __name__ == "__main__":
     # Diffusion parameters
     diffusion = Diffusion(config)
     
-    ddpm_interp_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, reverse_steps=50)
-    ddpm_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=50)
-    ddpm_diff_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=50)
+    ddpm_interp_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, reverse_steps=100)
+    ddpm_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=100)
+    ddpm_diff_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=100)
