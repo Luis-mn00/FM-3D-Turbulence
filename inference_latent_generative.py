@@ -30,7 +30,7 @@ def load_latent_model(config, model_path):
     return model
 
 def load_ae_model(config):
-    ae = VAE(input_size=config_ae.Model.in_channels,
+    ae = AE(input_size=config_ae.Model.in_channels,
                image_size=config_ae.Data.grid_size,
                hidden_size=config_ae.Model.hidden_size,
                depth=config_ae.Model.depth,
@@ -53,9 +53,9 @@ def integrate_ode_and_sample_latent(config, config_ae, model, ae, num_samples=1,
             print(f"Generating sample {_+1}/{num_samples}")
             # Initialize random sample
             xt = torch.randn((1, config_ae.Model.in_channels, config_ae.Data.grid_size, config_ae.Data.grid_size, config_ae.Data.grid_size), device=config.device)
-            #zt = ae.encode(xt)
-            mu, logvar = ae.encode(xt)
-            zt = ae.reparameterize(mu, logvar)
+            zt = ae.encode(xt)
+            #mu, logvar = ae.encode(xt)
+            #zt = ae.reparameterize(mu, logvar)
 
             for i, t in enumerate(torch.linspace(0, 1, steps, device=config.device), start=1):
                 #print(f"Step {i}/{steps}")
@@ -213,7 +213,7 @@ def test_energy_spectrum(samples, samples_gt, config):
     e_fm_tensor = torch.tensor(e_fm, device=config.device)
 
     diff = torch.abs(e_gt_tensor - e_fm_tensor)
-    print(f"Energy spectrum difference: {torch.mean(diff):.6f} +/- {torch.std(diff):.6f}")
+    print(f"Energy spectrum difference: {torch.mean(diff):.4e} +/- {torch.std(diff):.4e}")
 
 
 if __name__ == "__main__":

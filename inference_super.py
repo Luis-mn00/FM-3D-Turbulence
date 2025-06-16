@@ -69,7 +69,7 @@ def fm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
         y     = samples_y[i].unsqueeze(0).to(config.device)
         noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
 
-        y_pred = fm_interp(model, noise.clone(), x.clone(), steps=20)
+        y_pred = fm_interp(model, noise.clone(), x.clone(), steps=100)
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
@@ -539,7 +539,7 @@ if __name__ == "__main__":
         print(f"CUDA device name: {torch.cuda.get_device_name(torch.cuda.current_device())}")
     
     print("Loading dataset...")
-    num_samples = 3
+    num_samples = 50
     #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, num_samples=num_samples)
     dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
                                                     norm=config.Data.norm,
@@ -569,8 +569,8 @@ if __name__ == "__main__":
     model.eval()
     
     fm_interp_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y)
-    #fm_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
-    #fm_diff_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
+    fm_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
+    fm_diff_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
     #ddpm_interp_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y)
     #ddpm_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
     #ddpm_diff_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)

@@ -216,18 +216,20 @@ if __name__ == "__main__":
         utils.plot_slice(samples_gt, i, 1, 63, f"gt_sample_{i}")
     
     print("Generating samples...")
-    samples_fm = integrate_ode_and_sample(config, model, num_samples=num_samples, steps=100)
-    for i, sample in enumerate(samples_fm):
-        utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
+    #samples_fm = integrate_ode_and_sample(config, model, num_samples=num_samples, steps=100)
+    #for i, sample in enumerate(samples_fm):
+    #    utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
         
     # Generate samples using the denoising model
-    #samples_ddim = generate_samples_with_denoiser(config, model, num_samples, t_start=1000, reverse_steps=50, T=1000)
-    #for i, sample in enumerate(samples_ddim):
-    #    utils.plot_slice(sample, 0, 1, 63, f"generated_sample_diff_{i}")
+    samples_ddim = generate_samples_with_denoiser(config, model, num_samples, t_start=1000, reverse_steps=50, T=1000)
+    for i, sample in enumerate(samples_ddim):
+        utils.plot_slice(sample, 0, 1, 63, f"generated_sample_diff_{i}")
         
-    residual_of_generated(dataset, samples_fm, samples_gt, config)
-    test_wasserstein(samples_fm, samples_gt, config)
-    test_blurriness(samples_fm, samples_gt, config)
-    test_energy_spectrum(samples_fm, samples_gt, config)
-    #residual_of_generated(dataset, samples_ddim, samples_gt, config)
-    #test_wasserstein(samples_ddim, samples_gt, config)
+    #residual_of_generated(dataset, samples_fm, samples_gt, config)
+    #test_wasserstein(samples_fm, samples_gt, config)
+    #test_blurriness(samples_fm, samples_gt, config)
+    #test_energy_spectrum(samples_fm, samples_gt, config)
+    residual_of_generated(dataset, samples_ddim, samples_gt, config)
+    test_wasserstein(samples_ddim, samples_gt, config)
+    test_blurriness(samples_ddim, samples_gt, config)
+    test_energy_spectrum(samples_ddim, samples_gt, config)

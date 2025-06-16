@@ -8,8 +8,8 @@ Model:
   channel_size_out: 3  
   partition_size: [1, 1, 1] 
   drop_class_labels: True  
-  #save_path: "runs/002/epoch_800_0.0427_0.0408.pth" # std, batch 4
-  save_path: "runs/008/epoch_2000_0.0823_0.0266.pth" # std, batch 8
+  save_path: "runs/002/epoch_800_0.0427_0.0408.pth" # std, batch 4
+  #save_path: "runs/008/epoch_2000_0.0823_0.0266.pth" # std, batch 8
   #save_path: "runs/009/epoch_400_0.0377_0.0441.pth" # config, batch 8
 
 Training:

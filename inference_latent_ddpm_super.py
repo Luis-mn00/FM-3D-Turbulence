@@ -35,7 +35,7 @@ def load_latent_model(config, model_path):
     return model
 
 def load_ae_model(config):
-    ae = VAE(input_size=config_ae.Model.in_channels,
+    ae = AE(input_size=config_ae.Model.in_channels,
                image_size=config_ae.Data.grid_size,
                hidden_size=config_ae.Model.hidden_size,
                depth=config_ae.Model.depth,
@@ -82,10 +82,16 @@ def ddim_mask(model, ae_model, x, x_lr, t_start, reverse_steps, betas, alphas_cu
     next_seq = [-1] + list(seq[:-1])
     n = x.size(0)  # Batch size
     
-    mu1, logvar1 = ae.encode(x)
-    z = ae.reparameterize(mu1, logvar1)
-    mu2, logvar2 = ae.encode(x_lr)
-    z_lr = ae.reparameterize(mu2, logvar2)
+    z = ae_model.encode(x)
+    #mu1, logvar1 = ae_model.encode(x)
+    #z = ae_model.reparameterize(mu1, logvar1)
+    z_lr = ae_model.encode(x_lr)
+    #mu2, logvar2 = ae_model.encode(x_lr)
+    #z_lr = ae_model.reparameterize(mu2, logvar2)
+    
+    # Ensure mask is a PyTorch tensor and on the correct device
+    if isinstance(mask, np.ndarray):
+        mask = torch.tensor(mask, dtype=torch.float32, device=x.device)
 
     zt = z
     with torch.no_grad():
@@ -105,8 +111,9 @@ def ddim_mask(model, ae_model, x, x_lr, t_start, reverse_steps, betas, alphas_cu
             
             mask_t = mask * (t / t_start)**3
             x_masked = x0_pred * (1 - mask_t) + x_lr * mask_t
-            mu, logvar = ae.encode(x_masked)
-            z_masked = ae.reparameterize(mu, logvar)
+            z_masked = ae_model.encode(x_masked)
+            #mu, logvar = ae_model.encode(x_masked)
+            #z_masked = ae_model.reparameterize(mu, logvar)
             
             zt = alpha_bar_next.sqrt() * z_masked + (1 - alpha_bar_next).sqrt() * e
 
@@ -142,12 +149,15 @@ def ddpm_interp_sparse_experiment_latent(dataset, config, diffusion, config_ae, 
         noise = torch.randn_like(x).to(config.device)
         # Encode to latent space
         with torch.no_grad():
-            mu1, logvar1 = ae.encode(x)
-            z_lr = ae.reparameterize(mu1, logvar1)
-            mu2, logvar2 = ae.encode(y)
-            z_hr = ae.reparameterize(mu2, logvar2)
-            mu3, logvar3 = ae.encode(noise)
-            z_noise = ae.reparameterize(mu3, logvar3)
+            z_lr = ae.encode(x)
+            #mu1, logvar1 = ae.encode(x)
+            #z_lr = ae.reparameterize(mu1, logvar1)
+            z_hr = ae.encode(y)
+            #mu2, logvar2 = ae.encode(y)
+            #z_hr = ae.reparameterize(mu2, logvar2)
+            z_noise = ae.encode(noise)
+            #mu3, logvar3 = ae.encode(noise)
+            #z_noise = ae.reparameterize(mu3, logvar3)
         # Flow matching in latent space
         #z_pred = diffusion.ddim_article(z_lr, model, t_start, reverse_steps)
         z_pred = ddim_interp(model, z_noise.clone(), z_lr.clone(), t_start, reverse_steps, betas, alphas_cumprod)

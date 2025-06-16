@@ -8,8 +8,8 @@ Model:
   channel_size_out: 16 
   partition_size: [1, 1, 1]  
   drop_class_labels: True  
-  save_path: "runs/012/epoch_2000_0.2535_0.2718.pth" # std VAE 12
-  #save_path: "runs/012/epoch_2000_0.2535_0.2718.pth" # std AE 12
+  #save_path: "runs/012/epoch_2000_0.2535_0.2718.pth" # std VAE 12
+  save_path: "runs/014/epoch_2000_0.2529_0.2440.pth" # std AE 12
 
 Training:
   method: "std"
@@ -26,4 +26,4 @@ Diffusion:
   beta_end: 0.02
   mask_schedule_sig: 3
 
-device: "cuda:1"
+device: "cuda:0"

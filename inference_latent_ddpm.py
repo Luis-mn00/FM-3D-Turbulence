@@ -31,7 +31,7 @@ def load_latent_model(config, model_path):
     return model
 
 def load_ae_model(config):
-    ae = VAE(input_size=config_ae.Model.in_channels,
+    ae = AE(input_size=config_ae.Model.in_channels,
                image_size=config_ae.Data.grid_size,
                hidden_size=config_ae.Model.hidden_size,
                depth=config_ae.Model.depth,
@@ -51,9 +51,9 @@ def generate_samples_with_denoiser_latent(config, diffusion, config_ae, model, a
         print(f"Generating sample {_+1}/{num_samples}")
         # Ensure the input tensor is in float format to match the model's parameters
         x = torch.randn((1, config_ae.Model.in_channels, config_ae.Data.grid_size, config_ae.Data.grid_size, config_ae.Data.grid_size), device=config.device).float()
-        #z = ae.encode(x)
-        mu, logvar = ae.encode(x)
-        z = ae.reparameterize(mu, logvar)
+        z = ae.encode(x)
+        #mu, logvar = ae.encode(x)
+        #z = ae.reparameterize(mu, logvar)
         
         # Perform denoising using DDIM
         sample = diffusion.ddim(z, model, t_start, reverse_steps, plot_prog=False)
