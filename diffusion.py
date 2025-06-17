@@ -107,7 +107,7 @@ class Diffusion():
 
 
     @conditional_no_grad('grad')
-    def ddpm_article(self, x, model, t_start=None, K=1, plot_prog=False, grad=False):
+    def ddpm_article(self, x, model, t_start=None, K=3, plot_prog=False, grad=False):
         n = x.size(0)
         t_start = self.num_timesteps if t_start is None else t_start
 
@@ -155,7 +155,7 @@ class Diffusion():
 
 
     @conditional_no_grad('grad')
-    def ddim_article(self, x, model, t_start, reverse_steps, K=1, plot_prog=False, grad=False):
+    def ddim_article(self, x, model, t_start, reverse_steps, K=3, plot_prog=False, grad=False):
 
         for it in range(K):
             t = int(t_start * (0.7 ** it))

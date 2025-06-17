@@ -85,7 +85,7 @@ def ddim_mask(model, x, x_lr, t_start, reverse_steps, betas, alphas_cumprod, mas
 
     return x
 
-def ddpm_interp_sparse_experiment(dataset, config, diffusion, model, nsamples, samples_x, samples_y, t_start=1000, reverse_steps=20, T=1000):
+def ddpm_shu_sparse_experiment(dataset, config, diffusion, model, nsamples, samples_x, samples_y, t_start=1000, reverse_steps=20, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(config.Diffusion.num_diffusion_timesteps, config.Diffusion.beta_start, config.Diffusion.beta_end)
     
     losses = []
@@ -103,7 +103,59 @@ def ddpm_interp_sparse_experiment(dataset, config, diffusion, model, nsamples, s
         noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
         
         y_pred = diffusion.ddim_article(x, model, t_start, reverse_steps)
-        #y_pred = ddim_interp(model, noise.clone(), x.clone(), t_start, reverse_steps, betas, alphas_cumprod)
+        utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
+                                 y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
+                                 y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
+                                 f"super_shu_ddpm_{i}")
+
+        losses.append(torch.sqrt(torch.mean((y_pred - y) ** 2)).item())
+        residuals.append(torch.mean(torch.abs(utils.compute_divergence(dataset.data_scaler.inverse(y_pred[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size))).item())
+        residuals_gt.append(torch.mean(torch.abs(utils.compute_divergence(dataset.data_scaler.inverse(y[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size))).item())
+        residuals_diff.append(abs(residuals[i] - residuals_gt[i]))
+        # Detach tensors before passing them to LSiM_distance
+        y = y.detach()
+        y_pred = y_pred.detach()
+        lsim.append(utils.LSiM_distance_3D(y, y_pred))
+        
+        y = y.squeeze(0)
+        y_pred = y_pred.squeeze(0)
+        blurr_pred = utils.compute_blurriness(y_pred.cpu().numpy())
+        blurr_gt = utils.compute_blurriness(y.cpu().numpy())
+        blurriness.append(abs(blurr_pred - blurr_gt))
+        
+        y = y.unsqueeze(0)
+        y_pred = y_pred.unsqueeze(0)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
+        diff = np.abs(e_gt - e_pred)
+        diff = np.mean(diff)
+        spectrum.append(diff)
+        
+    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
+    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
+    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
+    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
+    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
+    
+def ddpm_interp_sparse_experiment(dataset, config, diffusion, model, nsamples, samples_x, samples_y, t_start=1000, reverse_steps=20, T=1000):
+    betas, alphas_cumprod = get_linear_beta_schedule(config.Diffusion.num_diffusion_timesteps, config.Diffusion.beta_start, config.Diffusion.beta_end)
+    
+    losses = []
+    residuals = []
+    residuals_gt = []
+    residuals_diff = []
+    lsim = []
+    blurriness = []
+    spectrum = []
+    
+    for i in range(nsamples):
+        print(f"Sample {i+1}/{nsamples}")
+        x     = samples_x[i].unsqueeze(0).to(config.device)
+        y     = samples_y[i].unsqueeze(0).to(config.device)
+        noise = torch.randn((1, config.Model.channel_size, config.Data.grid_size, config.Data.grid_size, config.Data.grid_size), device=config.device).float()
+        
+        y_pred = ddim_interp(model, noise.clone(), x.clone(), t_start, reverse_steps, betas, alphas_cumprod)
         utils.plot_2d_comparison(x[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y_pred[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
                                  y[0, 1, :, :, int(config.Data.grid_size / 2)].cpu().detach().numpy(),
@@ -327,6 +379,7 @@ if __name__ == "__main__":
     # Diffusion parameters
     diffusion = Diffusion(config)
     
+    ddpm_shu_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, reverse_steps=100)
     ddpm_interp_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, reverse_steps=100)
-    ddpm_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=100)
-    ddpm_diff_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=100)
+    #ddpm_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=100)
+    #ddpm_diff_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=100)

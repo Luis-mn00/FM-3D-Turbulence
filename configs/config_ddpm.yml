@@ -8,15 +8,15 @@ Model:
   channel_size_out: 3  
   partition_size: [1, 1, 1] 
   drop_class_labels: True  
-  save_path: "runs/002/epoch_800_0.0427_0.0408.pth" # std, batch 4
-  #save_path: "runs/008/epoch_2000_0.0823_0.0266.pth" # std, batch 8
-  #save_path: "runs/009/epoch_400_0.0377_0.0441.pth" # config, batch 8
+  #save_path: "runs/002/epoch_800_0.0427_0.0408.pth" # std, batch 4
+  save_path: "runs/008/epoch_2000_0.0823_0.0266.pth" # std, batch 8
+  #save_path: "runs/009/epoch_2000_0.0432_0.0391.pth" # config, batch 8
 
 Training:
   method: "ConFIG"
   epochs: 2000
   batch_size: 4
-  effective_batch_size: 8
+  effective_batch_size: 4
   learning_rate: 5e-4
   ddpm_loss_weight: 1e-3
   gamma: 0.995
@@ -29,4 +29,4 @@ Diffusion:
   beta_end: 0.02
   mask_schedule_sig: 3
 
-device: "cuda:1"
+device: "cuda:3"

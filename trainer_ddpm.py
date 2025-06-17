@@ -44,7 +44,7 @@ def ddpm_standard_step(dataset, model, diffusion, y, optimizer, config, accumula
         optimizer.step()
         optimizer.zero_grad()
 
-    return mse_loss, eq_res_m
+    return total_loss, eq_res_m
 
 def ddpm_PINN_step(dataset, model, diffusion, y, optimizer, config, accumulation_steps, batch_idx, length):
     batch_size = y.shape[0]

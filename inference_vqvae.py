@@ -29,7 +29,7 @@ def load_model(config, model_path):
     #           res_size=config.Model.res_size,
     #           device=config.device,
     #           z_dim=config.Model.z_dim).to(config.device)
-    model = AE(input_size=config.Model.in_channels,
+    model = VAE(input_size=config.Model.in_channels,
                image_size=config.Data.grid_size,
                hidden_size=config.Model.hidden_size,
                depth=config.Model.depth,
@@ -65,7 +65,7 @@ def show_recons(model, samples_x):
     print(f"Average RMSE: {avg_rmse:.4f}, Standard Deviation: {std_rmse:.4f}")
     
 def generate_samples(model, config, num_samples):
-    latent_dim = int(config.Data.grid_size / 4)  # Ensure latent_dim is an integer
+    latent_dim = int(config.Data.grid_size / pow(2, config.Model.depth))  # Ensure latent_dim is an integer
     samples = []
     with torch.no_grad():
         for _ in tqdm(range(num_samples), desc="Generating samples"):
@@ -77,7 +77,7 @@ def generate_samples(model, config, num_samples):
     return samples
 
 def generate_samples_vae(model, config, num_samples):
-    latent_dim = int(config.Data.grid_size / 4)  # Ensure latent_dim is an integer
+    latent_dim = int(config.Data.grid_size / pow(2, config.Model.depth))  # Ensure latent_dim is an integer
     samples = []
     for _ in range(num_samples):
         # Generate random latent vector
@@ -191,27 +191,28 @@ if __name__ == "__main__":
     show_recons(model, samples_x)
 
     # Data points for compression ratio and corresponding errors for AE and VAE
-    compression_ratios = [3, 6, 12]  
-    #avg_rmse_ae = [, , 0.1235]  
-    #std_rmse_ae = [, , 0.0085]  
-    #avg_rmse_vae = [, , 0.1247]
-    #std_rmse_vae = [, , 0.0085] 
+    compression_ratios = [3, 12]  
+    avg_rmse_ae = [0.0473, 0.1235]  
+    std_rmse_ae = [0.0039, 0.0085]  
+    avg_rmse_vae = [0.0530, 0.1247]
+    std_rmse_vae = [0.0058, 0.0085] 
 
     # Plotting the error vs compression ratio for both AE and VAE
-    #plt.figure(figsize=(8, 6))
-    #plt.errorbar(compression_ratios, avg_rmse_ae, yerr=std_rmse_ae, fmt='o-', capsize=5, label='AE')
-    #plt.errorbar(compression_ratios, avg_rmse_vae, yerr=std_rmse_vae, fmt='o-', capsize=5, label='VAE')
-    #plt.xlabel('Compression Ratio')
-    #plt.ylabel('Reconstruction Error (RMSE)')
-    #plt.title('Error vs Compression Ratio')
-    #plt.grid(True)
-    #plt.legend()
-    #plt.savefig(os.path.join(plot_folder, 'error_ae.png'))
-    #plt.show()
+    plt.figure(figsize=(8, 6))
+    plt.errorbar(compression_ratios, avg_rmse_ae, yerr=std_rmse_ae, fmt='o-', capsize=5, label='AE')
+    plt.errorbar(compression_ratios, avg_rmse_vae, yerr=std_rmse_vae, fmt='o-', capsize=5, label='VAE')
+    plt.xlabel('Compression Ratio')
+    plt.ylabel('Reconstruction Error (RMSE)')
+    plt.title('Error vs Compression Ratio')
+    plt.ylim(0, 0.15)
+    plt.grid(True)
+    plt.legend()
+    plt.savefig(os.path.join(plot_folder, 'error_ae.png'))
+    plt.show()
 
     print("Generating samples...")
-    samples_ae = generate_samples(model, config, num_samples)
-    #samples_ae = generate_samples_vae(model, config, num_samples)
+    #samples_ae = generate_samples(model, config, num_samples)
+    samples_ae = generate_samples_vae(model, config, num_samples)
     for i, sample in enumerate(samples_ae):
         utils.plot_slice(sample, 0, 1, 63, f"generated_sample_ae_{i}")
 
