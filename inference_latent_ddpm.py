@@ -77,10 +77,10 @@ def residual_of_generated(dataset, samples, samples_gt, config):
         res_gt, = utils.compute_divergence(dataset.data_scaler.inverse(sample_gt[:, :3, :, :, :].to("cpu")), 2*math.pi/config.Data.grid_size)
         test_residuals.append(torch.mean(torch.abs(res_gt)))
         
-    print(f"L2 residual: {np.mean(rmse_loss):.4f} +/- {np.std(rmse_loss):.4f}") 
+    print(f"L2 residual: {np.mean(rmse_loss):.4f} +/- {np.std(rmse_loss):.4f} (max: {np.max(rmse_loss):.4f})") 
     # Ensure test_residuals is a numpy array on CPU
     test_residuals_np = np.array([r.cpu().item() if torch.is_tensor(r) else r for r in test_residuals])
-    print(f"Residual difference: {np.mean(rmse_loss - test_residuals_np):.4f} +/- {np.std(rmse_loss - test_residuals_np):.4f}")
+    print(f"Residual difference: {np.mean(rmse_loss - test_residuals_np):.4f} +/- {np.std(rmse_loss - test_residuals_np):.4f} (max: {np.max(rmse_loss - test_residuals_np):.4f})")
 
     # Compute L2 norm of the difference between samples and ground truth
     l2_diff_norms = []
@@ -90,7 +90,7 @@ def residual_of_generated(dataset, samples, samples_gt, config):
         l2_diff_norm = torch.sqrt(torch.mean((y - y_pred) ** 2)).item()
         l2_diff_norms.append(l2_diff_norm)
 
-    print(f"Mean L2 difference between generated samples and ground truth: {np.mean(l2_diff_norms):.4f} +/- {np.std(l2_diff_norms):.4f}")
+    print(f"Mean L2 difference between generated samples and ground truth: {np.mean(l2_diff_norms):.4f} +/- {np.std(l2_diff_norms):.4f} (max: {np.max(l2_diff_norms):.4f})")
 
 def test_wasserstein(samples, samples_gt, config):
     wasserstein_cmf_distances = []
@@ -103,7 +103,7 @@ def test_wasserstein(samples, samples_gt, config):
     # Mean and std
     mean_wasserstein = np.mean(wasserstein_cmf_distances)
     std_wasserstein = np.std(wasserstein_cmf_distances)
-    print(f"Wasserstein distance: {mean_wasserstein:.4f} +/- {std_wasserstein:.4f}")
+    print(f"Wasserstein distance: {mean_wasserstein:.4f} +/- {std_wasserstein:.4f} (max: {np.max(wasserstein_cmf_distances):.4f})")
     
 def test_blurriness(samples, samples_gt, config):
     blurriness = []
@@ -118,7 +118,7 @@ def test_blurriness(samples, samples_gt, config):
 
     mean_blurriness = np.mean(blurriness)
     std_blurriness = np.std(blurriness)
-    print(f"Sharpness: {mean_blurriness:.4f} +/- {std_blurriness:.4f}")
+    print(f"Sharpness: {mean_blurriness:.4f} +/- {std_blurriness:.4f} (max: {np.max(blurriness):.4f})")
     
 def test_energy_spectrum(samples, samples_gt, config):
     e_gt = utils.compute_energy_spectrum(samples_gt, f"energy_gt")
@@ -132,7 +132,7 @@ def test_energy_spectrum(samples, samples_gt, config):
     e_fm_tensor = torch.tensor(e_fm, device=config.device)
 
     diff = torch.abs(e_gt_tensor - e_fm_tensor)
-    print(f"Energy spectrum difference: {torch.mean(diff):.4e} +/- {torch.std(diff):.4e}")
+    print(f"Energy spectrum difference: {torch.mean(diff):.4e} +/- {torch.std(diff):.4e} (max: {torch.max(diff):.4e})")
 
 
 if __name__ == "__main__":

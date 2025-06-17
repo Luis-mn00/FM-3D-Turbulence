@@ -98,12 +98,12 @@ def fm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
         diff = np.mean(diff)
         spectrum.append(diff)
 
-    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
-    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
-    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
-    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
-    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
-    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
+    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
+    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
+    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f} (max: {np.max(residuals_diff):.4f})")
+    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f} (max: {np.max(lsim):.4f})")
+    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f} (max: {np.max(blurriness):.4f})")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e} (max: {np.max(spectrum):.4e})")
     
 def fm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1):
     
@@ -162,12 +162,12 @@ def fm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sampl
         diff = np.mean(diff)
         spectrum.append(diff)
         
-    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
-    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
-    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
-    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
-    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
-    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
+    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
+    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
+    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f} (max: {np.max(residuals_diff):.4f})")
+    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f} (max: {np.max(lsim):.4f})")
+    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f} (max: {np.max(blurriness):.4f})")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e} (max: {np.max(spectrum):.4e})")
     
 def fm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044):
     
@@ -240,12 +240,12 @@ def fm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, 
         diff = np.mean(diff)
         spectrum.append(diff)
         
-    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
-    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
-    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
-    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
-    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
-    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
+    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
+    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
+    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f} (max: {np.max(residuals_diff):.4f})")
+    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f} (max: {np.max(lsim):.4f})")
+    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f} (max: {np.max(blurriness):.4f})")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e} (max: {np.max(spectrum):.4e})")
 
 # Linear Beta Schedule (from beta_min to beta_max over the T timesteps)
 def get_linear_beta_schedule(T, beta_min=1e-4, beta_max=0.02):
@@ -375,12 +375,12 @@ def ddpm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, s
         diff = np.mean(diff)
         spectrum.append(diff)
         
-    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
-    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
-    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
-    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
-    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
-    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
+    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
+    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
+    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f} (max: {np.max(residuals_diff):.4f})")
+    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f} (max: {np.max(lsim):.4f})")
+    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f} (max: {np.max(blurriness):.4f})")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e} (max: {np.max(spectrum):.4e})")
     
 def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, t_start=1000, reverse_steps=50, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(T)
@@ -440,12 +440,12 @@ def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
         diff = np.mean(diff)
         spectrum.append(diff)
         
-    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
-    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
-    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
-    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
-    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
-    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
+    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
+    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
+    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f} (max: {np.max(residuals_diff):.4f})")
+    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f} (max: {np.max(lsim):.4f})")
+    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f} (max: {np.max(blurriness):.4f})")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e} (max: {np.max(spectrum):.4e})")
     
 def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044, t_start=1000, reverse_steps=50, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(T)
@@ -519,12 +519,12 @@ def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x
         diff = np.mean(diff)
         spectrum.append(diff)
         
-    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f}")
-    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f}") 
-    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f}")
-    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f}")
-    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f}")
-    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e}")
+    print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
+    print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
+    print(f"Residual difference: {np.mean(residuals_diff):.4f} +/- {np.std(residuals_diff):.4f} (max: {np.max(residuals_diff):.4f})")
+    print(f"Mean LSiM: {np.mean(lsim):.4f} +/- {np.std(lsim):.4f} (max: {np.max(lsim):.4f})")
+    print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f} (max: {np.max(blurriness):.4f})")
+    print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e} (max: {np.max(spectrum):.4e})")
 
 # Main script
 if __name__ == "__main__":
