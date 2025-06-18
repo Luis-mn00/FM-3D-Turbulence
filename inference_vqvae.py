@@ -191,11 +191,11 @@ if __name__ == "__main__":
     show_recons(model, samples_x)
 
     # Data points for compression ratio and corresponding errors for AE and VAE
-    compression_ratios = [3, 12]  
-    avg_rmse_ae = [0.0473, 0.1235]  
-    std_rmse_ae = [0.0039, 0.0085]  
-    avg_rmse_vae = [0.0530, 0.1247]
-    std_rmse_vae = [0.0058, 0.0085] 
+    compression_ratios = [3, 6, 12]  
+    avg_rmse_ae = [0.0473, 0.0879, 0.1235]  
+    std_rmse_ae = [0.0039, 0.0067, 0.0085]  
+    avg_rmse_vae = [0.0530, 0.0884, 0.1247]
+    std_rmse_vae = [0.0058, 0.0065, 0.0085] 
 
     # Plotting the error vs compression ratio for both AE and VAE
     plt.figure(figsize=(8, 6))

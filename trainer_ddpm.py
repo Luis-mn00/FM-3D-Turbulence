@@ -233,6 +233,7 @@ def train_ddpm(config):
         # Validation loss
         model.eval()
         val_loss = 0.0
+        divergence_loss = 0.0
         with torch.no_grad():
             for val_batch in val_loader:
                 val_batch = val_batch.to(config.device)  # Ensure val_batch is on the correct device
@@ -242,8 +243,16 @@ def train_ddpm(config):
                 e_pred = model(x_t, t)
                 e_pred = e_pred.sample
                 val_loss += (noise - e_pred).square().mean()
+                
+                a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
+                a_b = a_b.view(-1, 1, 1, 1, 1)
+                x0_pred = (x_t - (1 - a_b).sqrt() * e_pred) / a_b.sqrt()
+                eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
+                eq_res_m = torch.mean(torch.abs(eq_residual))
+                divergence_loss += eq_res_m
 
         val_loss /= len(val_loader)
+        divergence_loss /= len(val_loader)
         val_losses.append(val_loss)
 
         wandb.log({
@@ -265,7 +274,7 @@ def train_ddpm(config):
             print(f"Saved checkpoint: {checkpoint_path}")
 
         # Log the epoch loss and validation loss
-        print(f"Epoch [{epoch + 1}/{config.Training.epochs}], Loss: {mse_loss:.4f}, Validation Loss: {val_loss:.4f}")
+        print(f"Epoch [{epoch + 1}/{config.Training.epochs}], Loss: {mse_loss:.4f}, Validation Loss: {val_loss:.4f}, Validation divergence: {divergence_loss:.4f}")
 
     wandb.finish()
 

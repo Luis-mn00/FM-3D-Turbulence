@@ -212,6 +212,8 @@ def interpolate_dataset(dataset, perc, method="nearest"):
     dims = dataset.shape[2:]
     n_points = int(np.prod(dims) * perc)
     sampled_ids = np.zeros((n_samples, n_points), dtype=np.int32)
+    
+    random.seed(1234)
 
     for i in range(n_samples):
         #print(f"sample {i+1}/{n_samples}")
@@ -624,55 +626,76 @@ def visualize_3d_cloud_volume(
         title,
         interactor_style=1, # 1 for TrackballCamera, allows easy navigation
     )
+
+def movingaverage(interval, window_size):
+    window = np.ones(int(window_size))/float(window_size)
+    return np.convolve(interval, window, 'same')
+
+def compute_energy_spectrum(velocity, name, smooth=True):
+    lx = ly = lz = 2.0*math.pi
     
-def compute_energy_spectrum(velocity_tensor, name):
-    N, _, Lx, Ly, Lz = velocity_tensor.shape
-    device = "cpu"
-    # Create wavenumber grids
-    kx = torch.fft.fftfreq(Lx, d=1.0).to(device)
-    ky = torch.fft.fftfreq(Ly, d=1.0).to(device)
-    kz = torch.fft.fftfreq(Lz, d=1.0).to(device)
-    KX, KY, KZ = torch.meshgrid(kx, ky, kz, indexing='ij')
-    K_mag = torch.sqrt(KX**2 + KY**2 + KZ**2).reshape(-1).cpu().numpy()
+    # Convert to numpy arrays
+    if isinstance(velocity, torch.Tensor):
+        velocity = velocity.cpu().numpy()
+        
+    N, _, nx, ny, nz = velocity.shape
+    nt = nx * ny * nz
+    n = nx
+    
+    k0x = 2.0*math.pi/lx
+    k0y = 2.0*math.pi/ly
+    k0z = 2.0*math.pi/lz
+    knorm = (k0x + k0y + k0z)/3.0
+    kxmax = nx/2
+    kymax = ny/2
+    kzmax = nz/2
+    wave_numbers = knorm*np.arange(0,n)
+    
+    spectra = []
+    
+    for i in range(N):
+        u = velocity[i, 0]
+        v = velocity[i, 1]
+        w = velocity[i, 2]
 
-    # Bin setup
-    k_max = np.max(K_mag)
-    num_bins = min(Lx, Ly, Lz) // 2
-    k_bins = np.linspace(0.0, k_max, num_bins + 1)
-    k_bin_centers = 0.5 * (k_bins[1:] + k_bins[:-1])
+        uh = np.fft.fftn(u) / nt
+        vh = np.fft.fftn(v) / nt
+        wh = np.fft.fftn(w) / nt
 
-    energy_all_snapshots = []
+        tkeh = np.zeros((nx,ny,nz))
+        tkeh = 0.5 * (uh * np.conj(uh) + vh * np.conj(vh) + wh * np.conj(wh)).real
+        
+        tke_spectrum = np.zeros(len(wave_numbers))
+        for kx in range(nx):
+            rkx = kx if kx <= kxmax else kx - nx
+            for ky in range(ny):
+                rky = ky if ky <= kymax else ky - ny
+                for kz in range(nz):
+                    rkz = kz if kz <= kzmax else kz - nz
+                    rk = np.sqrt(rkx**2 + rky**2 + rkz**2)
+                    k = int(np.round(rk))
+                    tke_spectrum[k] += tkeh[kx, ky, kz]
 
-    for n in range(N):
-        #print(f"Processing snapshot {n+1}/{N} for energy spectrum computation...")
-        u, v, w = velocity_tensor[n]
+        tke_spectrum /= knorm
+        tke_spectrum = tke_spectrum[1:]
 
-        u_hat = torch.fft.fftn(u).abs()**2
-        v_hat = torch.fft.fftn(v).abs()**2
-        w_hat = torch.fft.fftn(w).abs()**2
+        if smooth:
+            smoothed = movingaverage(tke_spectrum, 5)
+            smoothed[0:4] = tke_spectrum[0:4]
+            tke_spectrum = smoothed
 
-        E_k = 0.5 * (u_hat + v_hat + w_hat).reshape(-1).cpu().numpy()
-
-        E_spectrum, _ = np.histogram(K_mag, bins=k_bins, weights=E_k)
-        counts, _ = np.histogram(K_mag, bins=k_bins)
-
-        E_spectrum = E_spectrum / np.maximum(counts, 1)
-        energy_all_snapshots.append(E_spectrum)
-
-    # Average across snapshots
-    E_avg = np.mean(energy_all_snapshots, axis=0)
-
-    # Normalize k_bin_centers to start at 1
-    k_bin_centers = k_bin_centers / k_bin_centers[0]
-
-    # Normalize E_avg so the maximum value is 1
-    E_avg = E_avg / np.max(E_avg)
-
+        spectra.append(tke_spectrum)
+        
+    # Average over all N snapshots
+    tke_spectrum_avg = np.mean(spectra, axis=0)   
+    wave_numbers = wave_numbers[1:] 
+    
     # Plot
     plt.figure(figsize=(8, 5))
-    plt.loglog(k_bin_centers, E_avg + 1e-20, label="Normalized Energy Spectrum")
+    plt.loglog(wave_numbers, tke_spectrum_avg + 1e-20, label="Normalized TKE Spectrum")
     plt.xlabel("Wavenumber $k$")
     plt.ylabel("Energy $E(k)$")
+    plt.ylim(1e-7, 1)
     plt.title("Normalized Isotropic Energy Spectrum")
     plt.grid(True, which="both", ls="--", lw=0.5)
     plt.legend()
@@ -680,7 +703,7 @@ def compute_energy_spectrum(velocity_tensor, name):
     output_file = f"generated_plots/{name}.png"
     plt.savefig(output_file)
     
-    return E_avg
+    return tke_spectrum_avg
     
 def compute_energy_spectrum_original(file_path: str, name: str):
     device = "cpu"
@@ -705,9 +728,9 @@ def compute_energy_spectrum_original(file_path: str, name: str):
                 continue
 
             # FFT frequency grids
-            kx = torch.fft.fftfreq(Lx, d=1.0).to(device)
-            ky = torch.fft.fftfreq(Ly, d=1.0).to(device)
-            kz = torch.fft.fftfreq(Lz, d=1.0).to(device)
+            kx = torch.fft.fftfreq(Lx, d=2*math.pi / Lx).to(device)
+            ky = torch.fft.fftfreq(Ly, d=2*math.pi / Ly).to(device)
+            kz = torch.fft.fftfreq(Lz, d=2*math.pi / Lz).to(device)
             KX, KY, KZ = torch.meshgrid(kx, ky, kz, indexing='ij')
             K_mag = torch.sqrt(KX**2 + KY**2 + KZ**2).reshape(-1).cpu().numpy()
 
