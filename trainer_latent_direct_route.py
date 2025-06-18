@@ -146,6 +146,7 @@ def train_flow_matching(config, config_ae):
         # Validation loss
         model.eval()
         val_loss = 0.0
+        divergence_loss = 0.0
         with torch.no_grad():
             for batch_X, batch_Y in val_loader:
                 x1 = torch.tensor(batch_Y) if isinstance(batch_Y, np.ndarray) else batch_Y
@@ -165,14 +166,22 @@ def train_flow_matching(config, config_ae):
 
                 pred = model(zt, t)
                 val_loss += ((target - pred) ** 2).mean().item()
+                
+                z1_pred = zt + (1 - t[:, None, None, None, None]) * pred
+                x1_pred = model.decode(z1_pred)
+                eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
+                eq_res_m = torch.mean(torch.abs(eq_residual))
+                divergence_loss += eq_res_m
 
         val_loss /= len(val_loader)
+        divergence_loss /= len(val_loader)
         val_losses.append(val_loss)
         
         wandb.log({
             "epoch": epoch+1,
             "train_loss": mse_loss,
-            "validation_loss": val_loss
+            "validation_loss": val_loss,
+            "validation_divergence": divergence_loss
         })
         
         # Custom LR scheduler: multiply by gamma, but do not go below last_lr

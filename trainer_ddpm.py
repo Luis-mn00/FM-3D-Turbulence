@@ -100,7 +100,8 @@ def ddpm_PINN_dyn_step(dataset, model, diffusion, y, optimizer, config, accumula
 
     return mse_loss, eq_res_m
 
-def ddpm_ConFIG_step(dataset, model, diffusion, y, optimizer, config, operator, accumulation_steps, batch_idx, length):
+def ddpm_ConFIG_step(dataset, model, diffusion, y, optimizer, config, operator, accumulation_steps, batch_idx, length, grads1, grads2):
+    optimizer.zero_grad()
     batch_size = y.shape[0]
     t = torch.randint(0, diffusion.num_timesteps, size=(batch_size,), device=y.device)
 
@@ -123,13 +124,17 @@ def ddpm_ConFIG_step(dataset, model, diffusion, y, optimizer, config, operator, 
     # ConFIG
     loss_physics_unscaled = eq_res_m.clone()
     mse_loss.backward(retain_graph=True)
-    grads_1 = get_gradient_vector(model, none_grad_mode="skip")
-    #optimizer.zero_grad()
+    grads1.append(get_gradient_vector(model, none_grad_mode="skip"))
+    optimizer.zero_grad()
     eq_res_m.backward()
-    grads_2 = get_gradient_vector(model, none_grad_mode="skip")
+    grads2.append(get_gradient_vector(model, none_grad_mode="skip"))
 
-    operator.update_gradient(model, [grads_1, grads_2])
     if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == length:
+        grad_1 = torch.stack(grads1, dim=0).mean(dim=0)
+        grad_2 = torch.stack(grads2, dim=0).mean(dim=0)
+        operator.update_gradient(model, [grad_1, grad_2])
+        grads1.clear()
+        grads2.clear()
         optimizer.step()
         optimizer.zero_grad()
 
@@ -204,6 +209,8 @@ def train_ddpm(config):
         mse_loss = 0.0
 
         # Get the next batch from the train_loader
+        grads1 = []
+        grads2 = []
         for batch_idx, x1 in enumerate(train_loader):
             #print(f"Processing batch {batch_idx + 1}/{len(train_loader)}")
             if batch_idx % accumulation_steps == 0:
@@ -221,7 +228,7 @@ def train_ddpm(config):
             elif config.Training.method == "PINN_dyn":
                 loss, physics_loss = ddpm_PINN_dyn_step(dataset, model, diffusion, x1, optimizer, config, accumulation_steps, batch_idx, len(train_loader))
             elif config.Training.method == "ConFIG":
-                loss, physics_loss = ddpm_ConFIG_step(dataset, model, diffusion, x1, optimizer, config, operator, accumulation_steps, batch_idx, len(train_loader))
+                loss, physics_loss = ddpm_ConFIG_step(dataset, model, diffusion, x1, optimizer, config, operator, accumulation_steps, batch_idx, len(train_loader), grads1, grads2)
             else:
                 raise ValueError(f"Unknown training method: {config.Training.method}")
             
@@ -258,7 +265,8 @@ def train_ddpm(config):
         wandb.log({
             "epoch": epoch+1,
             "train_loss": mse_loss,
-            "validation_loss": val_loss
+            "validation_loss": val_loss,
+            "validation_divergence": divergence_loss
         })
 
         # Custom LR scheduler: multiply by gamma, but do not go below last_lr

@@ -218,7 +218,7 @@ plt.savefig("generated_plots/vy_optim.png")
 fig, ax = plt.subplots(figsize=(8, 8))
 plot_3D_field(ax=ax, data=vz_optim, cmap="PiYG")
 plt.savefig("generated_plots/vz_optim.png")
-"""
+
 
 dataset_optim = torch.load(f'data/data_spectral_128_mindiv.pt', weights_only=False, map_location='cpu')
 if isinstance(dataset_optim, np.ndarray):
@@ -229,10 +229,42 @@ print(velocity.shape)
 
 utils.compute_energy_spectrum(velocity, "energy")
 
-#utils.compute_energy_spectrum_original("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", "energy_original")
+utils.compute_energy_spectrum_original("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", "energy_original")
+"""
 
-sig = [0.020, 0.024, 0.028, 0.032, 0.036, 0.040, 0.044, 0.048, 0.052, 0.056, 0.060]
-rmse = [0.3021, 0.3023, 0.3022, 0.3020, 0.3023, 0.3020, 0.3022, ]
-lsim = [0.0845, 0.0848, 0.0833, 0.0841, 0.0842, 0.0837, 0.0862, ]
-residual = [0.7368, 0.7353, 0.7352, 0.7363, 0.7365, 0.7353, 0.7348, ]
-sharpness = [0.0647, 0.0654, 0.0652, 0.0646, 0.0655, 0.0653, 0.0656, ]
+sig = [0.004, 0.008, 0.012, 0.016, 0.020, 0.024, 0.028, 0.032, 0.036, 0.040, 0.044, 0.048, 0.052, 0.056, 0.060, 0.07, 0.08]
+rmse = [0.3022, 0.3023, 0.3019, 0.3021, 0.3021, 0.3023, 0.3022, 0.3020, 0.3023, 0.3020, 0.3022, 0.3022, 0.3022, 0.3022, 0.3023, 0.3022, 0.3022]
+lsim = [0.0818, 0.0831, 0.0834, 0.0836, 0.0845, 0.0848, 0.0833, 0.0841, 0.0842, 0.0837, 0.0862, 0.0837, 0.0839, 0.0816, 0.0870, 0.0834, 0.0863]
+residual = [0.7349, 0.7369, 0.7356, 0.7346, 0.7368, 0.7353, 0.7352, 0.7363, 0.7365, 0.7353, 0.7348, 0.7347, 0.7363, 0.7364, 0.7361, 0.7369, 0.7344]
+sharpness = [0.0651, 0.0653, 0.0647, 0.0650, 0.0647, 0.0654, 0.0652, 0.0646, 0.0655, 0.0653, 0.0656, 0.0657, 0.0648, 0.0651, 0.0650, 0.0660, 0.0654]
+
+# Define the lists and labels
+metrics = {
+    "LSIM": lsim,
+    "Residual": residual,
+    "Sharpness": sharpness,
+    "RMSE": rmse
+}
+
+# Normalize each list by its maximum value
+normalized_metrics = {name: [value / max(values) for value in values] for name, values in metrics.items()}
+
+# Create a single plot for comparison
+plt.figure(figsize=(10, 6))
+for metric_name, metric_values in normalized_metrics.items():
+    plt.plot(sig, metric_values, marker='o', label=metric_name)
+
+# Add labels, title, and legend
+plt.xlabel("Sigma")
+plt.ylabel("Normalized Metric Value")
+plt.title("Comparison of Metrics vs Sigma")
+plt.grid(True, linestyle="--", linewidth=0.5)
+plt.legend()
+plt.tight_layout()
+
+# Save the plot
+plt.savefig("generated_plots/metrics_vs_sigma.png")
+plt.show()
+
+    
+    

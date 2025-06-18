@@ -148,6 +148,7 @@ def train_flow_matching(config, config_ae):
         # Validation loss
         model.eval()
         val_loss = 0.0
+        divergence_loss = 0.0
         with torch.no_grad():
             for val_batch in val_loader:
                 x1 = val_batch
@@ -157,18 +158,28 @@ def train_flow_matching(config, config_ae):
                 #z1 = ae.reparameterize(mu1, logvar1)
                 batch_size = z1.shape[0]
                 t = torch.randint(0, diffusion.num_timesteps, size=(batch_size,), device=z1.device)
-                x_t, noise = diffusion.forward(z1, t)
-                pred = model(x_t, t)
+                z_t, noise = diffusion.forward(z1, t)
+                pred = model(z_t, t)
                 pred = pred.sample
                 val_loss += ((noise - pred) ** 2).mean().item()
                 
+                a_b = diffusion.alphas_b[t].view(batch_size, 1, 1, 1)
+                a_b = a_b.view(-1, 1, 1, 1, 1)
+                z0_pred = (z_t - (1 - a_b).sqrt() * pred) / a_b.sqrt()
+                x0_pred = model.decode(z0_pred)
+                eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x0_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
+                eq_res_m = torch.mean(torch.abs(eq_residual))
+                divergence_loss += eq_res_m
+                
         val_loss /= len(val_loader)
+        divergence_loss /= len(val_loader)
         val_losses.append(val_loss)
         
         wandb.log({
             "epoch": epoch+1,
             "train_loss": mse_loss,
-            "validation_loss": val_loss
+            "validation_loss": val_loss,
+            "validation_divergence": divergence_loss
         })
         
         # Custom LR scheduler: multiply by gamma, but do not go below last_lr

@@ -382,4 +382,4 @@ if __name__ == "__main__":
     #ddpm_shu_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, reverse_steps=100)
     #ddpm_interp_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, reverse_steps=100)
     #ddpm_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=100)
-    ddpm_diff_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=100, sig=0.048)
+    ddpm_diff_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=100, sig=0.08)

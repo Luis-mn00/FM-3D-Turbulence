@@ -228,6 +228,7 @@ def train_flow_matching(config):
         # Validation loss
         model.eval()
         val_loss = 0.0
+        divergence_loss = 0.0
         with torch.no_grad():
             for val_batch in val_loader:
                 x1 = val_batch
@@ -245,14 +246,21 @@ def train_flow_matching(config):
                 pred = model(xt, t)
                 pred = pred.sample
                 val_loss += ((target - pred) ** 2).mean().item()
+                
+                x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
+                eq_residual = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
+                eq_res_m = torch.mean(torch.abs(eq_residual))
+                divergence_loss += eq_res_m
 
         val_loss /= len(val_loader)
+        divergence_loss /= len(val_loader)
         val_losses.append(val_loss)
         
         wandb.log({
             "epoch": epoch+1,
             "train_loss": mse_loss,
-            "validation_loss": val_loss
+            "validation_loss": val_loss,
+            "divergence_loss": divergence_loss
         })
         
         # Custom LR scheduler: multiply by gamma, but do not go below last_lr

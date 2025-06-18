@@ -690,13 +690,20 @@ def compute_energy_spectrum(velocity, name, smooth=True):
     tke_spectrum_avg = np.mean(spectra, axis=0)   
     wave_numbers = wave_numbers[1:] 
     
+    # Analytical line
+    C = 1.6          
+    eps = 0.103        
+    E_k_analytic = C * (eps ** (2/3)) * (wave_numbers ** (-5/3))
+
+    
     # Plot
     plt.figure(figsize=(8, 5))
-    plt.loglog(wave_numbers, tke_spectrum_avg + 1e-20, label="Normalized TKE Spectrum")
+    plt.loglog(wave_numbers, tke_spectrum_avg + 1e-20)
+    plt.loglog(wave_numbers, E_k_analytic, 'k--', label=r"$1.6 \, \varepsilon^{2/3} \, k^{-5/3}$")
     plt.xlabel("Wavenumber $k$")
     plt.ylabel("Energy $E(k)$")
     plt.ylim(1e-7, 1)
-    plt.title("Normalized Isotropic Energy Spectrum")
+    plt.title("Energy Spectrum")
     plt.grid(True, which="both", ls="--", lw=0.5)
     plt.legend()
     plt.tight_layout()
@@ -705,80 +712,81 @@ def compute_energy_spectrum(velocity, name, smooth=True):
     
     return tke_spectrum_avg
     
-def compute_energy_spectrum_original(file_path: str, name: str):
-    device = "cpu"
-    energy_all_snapshots = []
-    k_bin_centers = None  # Will be set inside loop
+def compute_energy_spectrum_original(file_path: str, name: str, smooth=True):
+    lx = ly = lz = 2.0 * math.pi
 
     with h5py.File(file_path, 'r') as f:
-        keys = list(f['sims']['sim0'].keys())[:50]  # Only first 5
+        keys = list(f['sims']['sim0'].keys())[:5]  
         print(f"Found {len(keys)} snapshots.")
-
+        
+        spectra = []
         for i, key in enumerate(keys):
             print(f"\n📦 Processing snapshot {i+1}/{len(keys)}: {key}")
             sample = f['sims']['sim0'][key]
-            sample = np.transpose(sample, (3, 0, 1, 2))[:3]  # (3, 512, 512, 512)
+            velocity = np.transpose(sample, (3, 0, 1, 2))[:3]  # (3, Nx, Ny, Nz)
 
-            # Convert to torch tensor
-            velocity_tensor = torch.from_numpy(sample).float().to(device)
-            _, Lx, Ly, Lz = velocity_tensor.shape
+            # Add batch dimension: (1, 3, Nx, Ny, Nz)
+            velocity = velocity[np.newaxis, ...]
 
-            if torch.all(velocity_tensor == 0):
-                print("⚠️ Warning: Snapshot contains only zeros. Skipping.")
-                continue
+            N, _, nx, ny, nz = velocity.shape
+            nt = nx * ny * nz
+            n = nx
+            
+            k0x = 2.0 * math.pi / lx
+            k0y = 2.0 * math.pi / ly
+            k0z = 2.0 * math.pi / lz
+            knorm = (k0x + k0y + k0z) / 3.0
+            kxmax = nx / 2
+            kymax = ny / 2
+            kzmax = nz / 2
+            wave_numbers = knorm * np.arange(0, n)
 
-            # FFT frequency grids
-            kx = torch.fft.fftfreq(Lx, d=2*math.pi / Lx).to(device)
-            ky = torch.fft.fftfreq(Ly, d=2*math.pi / Ly).to(device)
-            kz = torch.fft.fftfreq(Lz, d=2*math.pi / Lz).to(device)
-            KX, KY, KZ = torch.meshgrid(kx, ky, kz, indexing='ij')
-            K_mag = torch.sqrt(KX**2 + KY**2 + KZ**2).reshape(-1).cpu().numpy()
+            u, v, w = velocity[0, 0], velocity[0, 1], velocity[0, 2]
 
-            # FFT and energy spectrum
-            u, v, w = velocity_tensor
-            u_hat = torch.fft.fftn(u).abs()**2
-            v_hat = torch.fft.fftn(v).abs()**2
-            w_hat = torch.fft.fftn(w).abs()**2
-            E_k = 0.5 * (u_hat + v_hat + w_hat).reshape(-1).cpu().numpy()
+            uh = np.fft.fftn(u) / nt
+            vh = np.fft.fftn(v) / nt
+            wh = np.fft.fftn(w) / nt
 
-            # Avoid nan due to empty bins
-            num_bins = min(Lx, Ly, Lz) // 2
-            k_bins = np.linspace(0.0, np.max(K_mag), num_bins + 1)
-            k_bin_centers = 0.5 * (k_bins[1:] + k_bins[:-1])
+            tkeh = 0.5 * (uh * np.conj(uh) + vh * np.conj(vh) + wh * np.conj(wh)).real
 
-            E_spectrum, _ = np.histogram(K_mag, bins=k_bins, weights=E_k)
-            counts, _ = np.histogram(K_mag, bins=k_bins)
-            with np.errstate(divide='ignore', invalid='ignore'):
-                E_spectrum = np.where(counts > 0, E_spectrum / counts, 0.0)
+            tke_spectrum = np.zeros(len(wave_numbers))
+            for kx in range(nx):
+                rkx = kx if kx <= kxmax else kx - nx
+                for ky in range(ny):
+                    rky = ky if ky <= kymax else ky - ny
+                    for kz in range(nz):
+                        rkz = kz if kz <= kzmax else kz - nz
+                        rk = np.sqrt(rkx**2 + rky**2 + rkz**2)
+                        k = int(np.round(rk))
+                        if k < len(tke_spectrum):
+                            tke_spectrum[k] += tkeh[kx, ky, kz]
 
-            energy_all_snapshots.append(E_spectrum)
+            tke_spectrum /= knorm
+            tke_spectrum = tke_spectrum[1:]  # remove k=0
+            if smooth:
+                smoothed = movingaverage(tke_spectrum, 5)
+                smoothed[0:4] = tke_spectrum[0:4]
+                tke_spectrum = smoothed
 
-    # Stack and compute average
-    if len(energy_all_snapshots) == 0:
-        print("❌ No valid energy data collected. Exiting.")
-        return
+            spectra.append(tke_spectrum)
 
-    E_avg = np.mean(energy_all_snapshots, axis=0)
+    # Average over all snapshots
+    tke_spectrum_avg = np.mean(spectra, axis=0)
+    wave_numbers = wave_numbers[1:]
 
-    if np.all(np.isnan(E_avg)) or np.max(E_avg) == 0:
-        print("❌ E_avg contains only NaN or zeros. Cannot normalize.")
-        return
-
-    # Normalize and truncate
-    k_bin_centers = k_bin_centers / k_bin_centers[0]
-    E_avg = E_avg / np.max(E_avg)
-
-    max_valid_k = min(Lx, Ly, Lz) // 2
-    valid = k_bin_centers <= max_valid_k
-    k_bin_centers = k_bin_centers[valid]
-    E_avg = E_avg[valid]
+    # Kolmogorov analytical line
+    C = 1.6          
+    eps = 0.103 
+    E_k_analytic = C * (eps ** (2 / 3)) * (wave_numbers ** (-5 / 3))
 
     # Plot
     plt.figure(figsize=(8, 5))
-    plt.loglog(k_bin_centers, E_avg + 1e-20, label="Normalized Energy Spectrum")
+    plt.loglog(wave_numbers, tke_spectrum_avg + 1e-20, label="Averaged TKE Spectrum")
+    plt.loglog(wave_numbers, E_k_analytic, 'k--', label=r"$1.6 \, \varepsilon^{2/3} \, k^{-5/3}$")
     plt.xlabel("Wavenumber $k$")
     plt.ylabel("Energy $E(k)$")
-    plt.title("Normalized Energy Spectrum from HDF5")
+    plt.ylim(1e-7, 1)
+    plt.title("Energy Spectrum")
     plt.grid(True, which="both", ls="--", lw=0.5)
     plt.legend()
     plt.tight_layout()
@@ -786,5 +794,7 @@ def compute_energy_spectrum_original(file_path: str, name: str):
     os.makedirs("generated_plots", exist_ok=True)
     output_file = f"generated_plots/{name}.png"
     plt.savefig(output_file)
-    plt.close()
-    print(f"✅ Saved spectrum plot to: {output_file}")
+
+    return tke_spectrum_avg
+
+            
