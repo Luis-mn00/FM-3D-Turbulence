@@ -19,23 +19,20 @@ wandb.login(key="f4a726b2fe7929990149e82fb88da423cfa74e46")
 
 wandb.init(project="fm")
 
-def fm_standard_step(model, xt, t, target, optimizer, config, accumulation_steps, batch_idx, length):
+def fm_standard_step(model, xt, t, target, optimizer, config):
     # Forward pass
     pred = model(xt, t)
     pred = pred.sample
     loss = ((target - pred) ** 2).mean()
     total_loss = loss
     
-    total_loss = total_loss / accumulation_steps
     total_loss.backward() 
-
-    if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == length:
-        optimizer.step()
-        optimizer.zero_grad()
+    optimizer.step()
+    optimizer.zero_grad()
     
     return total_loss, loss
 
-def fm_PINN_step(dataset, model, xt, t, target, optimizer, config, accumulation_steps, batch_idx, length):
+def fm_PINN_step(dataset, model, xt, t, target, optimizer, config):
     # Forward pass
     pred = model(xt, t)
     pred = pred.sample
@@ -51,16 +48,13 @@ def fm_PINN_step(dataset, model, xt, t, target, optimizer, config, accumulation_
     # Combine the flow matching loss and the divergence-free loss
     total_loss = loss + config.Training.divergence_loss_weight * divergence_loss
     
-    total_loss = total_loss / accumulation_steps
     total_loss.backward() 
-
-    if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == length:
-        optimizer.step()
-        optimizer.zero_grad()
+    optimizer.step()
+    optimizer.zero_grad()
     
     return total_loss, loss
 
-def fm_PINN_dyn_step(dataset, model, xt, t, target, optimizer, config, accumulation_steps, batch_idx, length):
+def fm_PINN_dyn_step(dataset, model, xt, t, target, optimizer, config):
     # Forward pass
     pred = model(xt, t)
     pred = pred.sample
@@ -77,21 +71,17 @@ def fm_PINN_dyn_step(dataset, model, xt, t, target, optimizer, config, accumulat
     coef = loss / divergence_loss
     total_loss = loss + coef * divergence_loss
     
-    total_loss = total_loss / accumulation_steps
     total_loss.backward() 
-
-    if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == length:
-        optimizer.step()
-        optimizer.zero_grad()
+    optimizer.step()
+    optimizer.zero_grad()
     
     return total_loss, loss
 
-def fm_ConFIG_step(dataset, model, xt, t, target, optimizer, config, operator, accumulation_steps, batch_idx, length):
+def fm_ConFIG_step(dataset, model, xt, t, target, optimizer, config, operator, ):
     # Forward pass
     pred = model(xt, t)
     pred = pred.sample
     loss = ((target - pred) ** 2).mean()
-    loss = loss / accumulation_steps
     
     x1_pred = xt + (1 - t[:, None, None, None, None]) * pred
 
@@ -99,20 +89,18 @@ def fm_ConFIG_step(dataset, model, xt, t, target, optimizer, config, operator, a
     divergence = utils.compute_divergence(dataset.data_scaler.inverse(x1_pred[:, :3, :, :, :]), 2*math.pi/config.Data.grid_size)
     divergence_loss = torch.mean(torch.abs(divergence))
     #divergence_loss = torch.sqrt(torch.sum(divergence ** 2))
-    divergence_loss = divergence_loss / accumulation_steps
     
     # ConFIG
     loss_physics_unscaled = divergence_loss.clone()
     loss.backward(retain_graph=True)
     grads_1 = get_gradient_vector(model, none_grad_mode="skip")
-    #optimizer.zero_grad()
+    optimizer.zero_grad()
     divergence_loss.backward()
     grads_2 = get_gradient_vector(model, none_grad_mode="skip")
 
     operator.update_gradient(model, [grads_1, grads_2])
-    if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == length:
-        optimizer.step()
-        optimizer.zero_grad()
+    optimizer.step()
+    optimizer.zero_grad()
     
     total_loss = loss + config.Training.divergence_loss_weight * divergence_loss
     
@@ -176,7 +164,6 @@ def train_flow_matching(config):
     print("Starting training...")
     mse_losses = []
     val_losses = []
-    accumulation_steps = config.Training.effective_batch_size // config.Training.batch_size
     operator = ConFIGOperator(length_model=UniProjectionLength())
     for epoch in range(config.Training.epochs):
         model.train()
@@ -185,8 +172,7 @@ def train_flow_matching(config):
         # Get the next batch from the train_loader
         for batch_idx, x1 in enumerate(train_loader):
             #print(f"Batch {batch_idx+1}/{len(train_loader)}")
-            if batch_idx % accumulation_steps == 0:
-                optimizer.zero_grad()
+            optimizer.zero_grad()
             
             # Ensure all elements in the batch are tensors
             x1 = torch.tensor(x1) if isinstance(x1, np.ndarray) else x1
@@ -206,21 +192,21 @@ def train_flow_matching(config):
             
             # Perform the training step
             if config.Training.method == "std":
-                total_loss, loss = fm_standard_step(model, xt, t, target, optimizer, config, accumulation_steps, batch_idx, len(train_loader))
+                total_loss, loss = fm_standard_step(model, xt, t, target, optimizer, config)
                 
             elif config.Training.method == "PINN":
-                total_loss, loss = fm_PINN_step(dataset, model, xt, t, target, optimizer, config, accumulation_steps, batch_idx, len(train_loader))
+                total_loss, loss = fm_PINN_step(dataset, model, xt, t, target, optimizer, config)
                 
             elif config.Training.method == "PINN_dyn":
-                total_loss, loss = fm_PINN_dyn_step(dataset, model, xt, t, target, optimizer, config, accumulation_steps, batch_idx, len(train_loader))
+                total_loss, loss = fm_PINN_dyn_step(dataset, model, xt, t, target, optimizer, config)
                 
             elif config.Training.method == "ConFIG":
-                total_loss, loss = fm_ConFIG_step(dataset, model, xt, t, target, optimizer, config, operator, accumulation_steps, batch_idx, len(train_loader))
+                total_loss, loss = fm_ConFIG_step(dataset, model, xt, t, target, optimizer, config, operator)
                 
             else:
                 raise ValueError(f"Unknown training method: {config.Training.method}")
             
-            mse_loss += loss.item() * accumulation_steps
+            mse_loss += loss.item()
             
         mse_loss /= len(train_loader)
         mse_losses.append(mse_loss)

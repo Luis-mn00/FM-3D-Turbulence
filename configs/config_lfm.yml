@@ -9,7 +9,7 @@ Model:
   partition_size: [1, 1, 1]  
   drop_class_labels: True  
   save_path: "runs/013/epoch_2000_1.8676_1.8525.pth" # std VAE 12
-  #save_path: "runs/015/epoch_1700_2.3717_2.6943.pth" # std AE 12
+  #save_path: "runs/015/epoch_2000_2.4147_2.3946.pth" # std AE 12
 
 Training:
   method: "std"
@@ -21,4 +21,4 @@ Training:
   gamma: 0.995
   last_lr: 1e-5
 
-device: "cuda:3"
+device: "cuda:0"

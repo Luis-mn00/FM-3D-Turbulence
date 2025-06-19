@@ -166,17 +166,13 @@ def test_blurriness(samples, samples_gt, config):
     print(f"Sharpness: {mean_blurriness:.4f} +/- {std_blurriness:.4f} (max: {np.max(blurriness):.4f})")
     
 def test_energy_spectrum(samples, samples_gt, config):
-    e_gt = utils.compute_energy_spectrum(samples_gt, f"energy_gt")
+    e_gt = utils.compute_energy_spectrum(samples_gt, f"energy_gt", config.device)
     
     # Ensure samples are converted to a tensor before passing to compute_energy_spectrum
     samples_tensor = torch.stack([s.squeeze(0) for s in samples])
-    e_fm = utils.compute_energy_spectrum(samples_tensor, f"energy_fm")
-    
-    # Convert e_gt and e_fm to tensors before applying torch.abs
-    e_gt_tensor = torch.tensor(e_gt, device=config.device)
-    e_fm_tensor = torch.tensor(e_fm, device=config.device)
+    e_fm = utils.compute_energy_spectrum(samples_tensor, f"energy_fm", config.device)
 
-    diff = torch.abs(e_gt_tensor - e_fm_tensor)
+    diff = torch.abs(e_gt - e_fm)
     print(f"Energy spectrum difference: {torch.mean(diff):.4e} +/- {torch.std(diff):.4e} (max: {torch.max(diff):.4e})")
 
 if __name__ == "__main__":
@@ -216,20 +212,20 @@ if __name__ == "__main__":
         utils.plot_slice(samples_gt, i, 1, 63, f"gt_sample_{i}")
     
     print("Generating samples...")
-    #samples_fm = integrate_ode_and_sample(config, model, num_samples=num_samples, steps=100)
-    #for i, sample in enumerate(samples_fm):
-    #    utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
+    samples_fm = integrate_ode_and_sample(config, model, num_samples=num_samples, steps=100)
+    for i, sample in enumerate(samples_fm):
+        utils.plot_slice(sample, 0, 1, 63, f"generated_sample_{i}")
         
     # Generate samples using the denoising model
-    samples_ddim = generate_samples_with_denoiser(config, model, num_samples, t_start=1000, reverse_steps=50, T=1000)
-    for i, sample in enumerate(samples_ddim):
-        utils.plot_slice(sample, 0, 1, 63, f"generated_sample_diff_{i}")
+    #samples_ddim = generate_samples_with_denoiser(config, model, num_samples, t_start=1000, reverse_steps=50, T=1000)
+    #for i, sample in enumerate(samples_ddim):
+    #    utils.plot_slice(sample, 0, 1, 63, f"generated_sample_diff_{i}")
         
-    #residual_of_generated(dataset, samples_fm, samples_gt, config)
-    #test_wasserstein(samples_fm, samples_gt, config)
-    #test_blurriness(samples_fm, samples_gt, config)
-    #test_energy_spectrum(samples_fm, samples_gt, config)
-    residual_of_generated(dataset, samples_ddim, samples_gt, config)
-    test_wasserstein(samples_ddim, samples_gt, config)
-    test_blurriness(samples_ddim, samples_gt, config)
-    test_energy_spectrum(samples_ddim, samples_gt, config)
+    residual_of_generated(dataset, samples_fm, samples_gt, config)
+    test_wasserstein(samples_fm, samples_gt, config)
+    test_blurriness(samples_fm, samples_gt, config)
+    test_energy_spectrum(samples_fm, samples_gt, config)
+    #residual_of_generated(dataset, samples_ddim, samples_gt, config)
+    #test_wasserstein(samples_ddim, samples_gt, config)
+    #test_blurriness(samples_ddim, samples_gt, config)
+    #test_energy_spectrum(samples_ddim, samples_gt, config)

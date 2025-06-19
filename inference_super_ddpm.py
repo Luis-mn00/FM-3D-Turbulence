@@ -125,11 +125,11 @@ def ddpm_shu_sparse_experiment(dataset, config, diffusion, model, nsamples, samp
         
         y = y.unsqueeze(0)
         y_pred = y_pred.unsqueeze(0)
-        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
-        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
-        diff = np.abs(e_gt - e_pred)
-        diff = np.mean(diff)
-        spectrum.append(diff)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt", config.device)
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred", config.device)
+        diff = torch.abs(e_gt - e_pred)
+        diff = torch.mean(diff)
+        spectrum.append(diff.cpu().numpy())
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
@@ -178,11 +178,11 @@ def ddpm_interp_sparse_experiment(dataset, config, diffusion, model, nsamples, s
         
         y = y.unsqueeze(0)
         y_pred = y_pred.unsqueeze(0)
-        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
-        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
-        diff = np.abs(e_gt - e_pred)
-        diff = np.mean(diff)
-        spectrum.append(diff)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt", config.device)
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred", config.device)
+        diff = torch.abs(e_gt - e_pred)
+        diff = torch.mean(diff)
+        spectrum.append(diff.cpu().numpy())
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
@@ -244,11 +244,11 @@ def ddpm_mask_sparse_experiment(dataset, config, diffusion, model, nsamples, sam
         
         y = y.unsqueeze(0)
         y_pred = y_pred.unsqueeze(0)
-        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
-        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
-        diff = np.abs(e_gt - e_pred)
-        diff = np.mean(diff)
-        spectrum.append(diff)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt", config.device)
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred", config.device)
+        diff = torch.abs(e_gt - e_pred)
+        diff = torch.mean(diff)
+        spectrum.append(diff.cpu().numpy())
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
@@ -324,11 +324,11 @@ def ddpm_diff_mask_sparse_experiment(dataset, config, diffusion, model, nsamples
         
         y = y.unsqueeze(0)
         y_pred = y_pred.unsqueeze(0)
-        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
-        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
-        diff = np.abs(e_gt - e_pred)
-        diff = np.mean(diff)
-        spectrum.append(diff)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt", config.device)
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred", config.device)
+        diff = torch.abs(e_gt - e_pred)
+        diff = torch.mean(diff)
+        spectrum.append(diff.cpu().numpy())
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
@@ -346,7 +346,7 @@ if __name__ == "__main__":
     print(config.device)
     
     # Generate samples using ODE integration
-    num_samples = 10
+    num_samples = 50
     #dataset = IsotropicTurbulenceDataset(dt=config.Data.dt, grid_size=config.Data.grid_size, crop=config.Data.crop, seed=config.Data.seed, size=config.Data.size, batch_size=config.Training.batch_size, num_samples=num_samples, field=None)
     dataset = BigSpectralIsotropicTurbulenceDataset(grid_size=config.Data.grid_size,
                                                     norm=config.Data.norm,
@@ -379,7 +379,7 @@ if __name__ == "__main__":
     # Diffusion parameters
     diffusion = Diffusion(config)
     
-    #ddpm_shu_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, reverse_steps=100)
-    #ddpm_interp_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, reverse_steps=100)
-    #ddpm_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=100)
-    ddpm_diff_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=100, sig=0.08)
+    ddpm_shu_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, reverse_steps=100)
+    ddpm_interp_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, reverse_steps=100)
+    ddpm_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=100)
+    ddpm_diff_mask_sparse_experiment(dataset, config, diffusion, model, num_samples, samples_x, samples_y, samples_ids, reverse_steps=100, sig=0.016)

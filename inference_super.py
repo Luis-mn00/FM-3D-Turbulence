@@ -92,11 +92,11 @@ def fm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
         
         y = y.unsqueeze(0)
         y_pred = y_pred.unsqueeze(0)
-        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
-        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
-        diff = np.abs(e_gt - e_pred)
-        diff = np.mean(diff)
-        spectrum.append(diff)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt", config.device)
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred", config.device)
+        diff = torch.abs(e_gt - e_pred)
+        diff = torch.mean(diff)
+        spectrum.append(diff.cpu().numpy())
 
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
@@ -156,11 +156,11 @@ def fm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sampl
         
         y = y.unsqueeze(0)
         y_pred = y_pred.unsqueeze(0)
-        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
-        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
-        diff = np.abs(e_gt - e_pred)
-        diff = np.mean(diff)
-        spectrum.append(diff)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt", config.device)
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred", config.device)
+        diff = torch.abs(e_gt - e_pred)
+        diff = torch.mean(diff)
+        spectrum.append(diff.cpu().numpy())
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
@@ -234,11 +234,11 @@ def fm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, 
         
         y = y.unsqueeze(0)
         y_pred = y_pred.unsqueeze(0)
-        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
-        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
-        diff = np.abs(e_gt - e_pred)
-        diff = np.mean(diff)
-        spectrum.append(diff)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt", config.device)
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred", config.device)
+        diff = torch.abs(e_gt - e_pred)
+        diff = torch.mean(diff)
+        spectrum.append(diff.cpu().numpy())
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
@@ -329,7 +329,7 @@ def ddim_mask(model, x, x_lr, t_start, reverse_steps, betas, alphas_cumprod, mas
 
     return x
 
-def ddpm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, t_start=1000, reverse_steps=50, T=1000):
+def ddpm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, t_start=1000, reverse_steps=100, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(T)
     
     losses = []
@@ -369,11 +369,11 @@ def ddpm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, s
         
         y = y.unsqueeze(0)
         y_pred = y_pred.unsqueeze(0)
-        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
-        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
-        diff = np.abs(e_gt - e_pred)
-        diff = np.mean(diff)
-        spectrum.append(diff)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt", config.device)
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred", config.device)
+        diff = torch.abs(e_gt - e_pred)
+        diff = torch.mean(diff)
+        spectrum.append(diff.cpu().numpy())
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
@@ -382,7 +382,7 @@ def ddpm_interp_sparse_experiment(dataset, config, model, nsamples, samples_x, s
     print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f} (max: {np.max(blurriness):.4f})")
     print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e} (max: {np.max(spectrum):.4e})")
     
-def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, t_start=1000, reverse_steps=50, T=1000):
+def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, t_start=1000, reverse_steps=100, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(T)
     
     losses = []
@@ -434,11 +434,11 @@ def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
         
         y = y.unsqueeze(0)
         y_pred = y_pred.unsqueeze(0)
-        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
-        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
-        diff = np.abs(e_gt - e_pred)
-        diff = np.mean(diff)
-        spectrum.append(diff)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt", config.device)
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred", config.device)
+        diff = torch.abs(e_gt - e_pred)
+        diff = torch.mean(diff)
+        spectrum.append(diff.cpu().numpy())
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
@@ -447,7 +447,7 @@ def ddpm_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, sam
     print(f"Mean blurriness difference: {np.mean(blurriness):.4f} +/- {np.std(blurriness):.4f} (max: {np.max(blurriness):.4f})")
     print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e} (max: {np.max(spectrum):.4e})")
     
-def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044, t_start=1000, reverse_steps=50, T=1000):
+def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x, samples_y, samples_ids, w_mask=1, sig=0.044, t_start=1000, reverse_steps=100, T=1000):
     betas, alphas_cumprod = get_linear_beta_schedule(T)
     
     losses = []
@@ -513,11 +513,11 @@ def ddpm_diff_mask_sparse_experiment(dataset, config, model, nsamples, samples_x
         
         y = y.unsqueeze(0)
         y_pred = y_pred.unsqueeze(0)
-        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
-        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
-        diff = np.abs(e_gt - e_pred)
-        diff = np.mean(diff)
-        spectrum.append(diff)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt", config.device)
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred", config.device)
+        diff = torch.abs(e_gt - e_pred)
+        diff = torch.mean(diff)
+        spectrum.append(diff.cpu().numpy())
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
@@ -570,7 +570,7 @@ if __name__ == "__main__":
     
     fm_interp_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y)
     fm_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
-    fm_diff_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
+    fm_diff_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids, sig=0.016)
     #ddpm_interp_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y)
     #ddpm_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)
     #ddpm_diff_mask_sparse_experiment(dataset, config, model, num_samples, samples_x, samples_y, samples_ids)

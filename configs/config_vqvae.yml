@@ -9,13 +9,13 @@ Model:
   depth: 2
   num_res_block: 2
   res_size: 32
-  z_dim: 32
-  #ae_path: "runs/007/epoch_1000_18.9396_19.2390.pth" # VAE 12
+  z_dim: 16
+  ae_path: "runs/007/epoch_1000_18.9396_19.2390.pth" # VAE 12
   #ae_path: "runs/011/epoch_1000_18.6367_18.9378.pth" # AE 12
+  #ae_path: "runs/019/epoch_1000_12.9554_13.0651.pth" # VAE 6
+  #ae_path: "runs/018/epoch_1000_12.7719_12.8772.pth" # AE 6
   #ae_path: "runs/017/epoch_1000_4.8884_4.9092.pth" # VAE 3
   #ae_path: "runs/016/epoch_1000_3.8754_3.8646.pth" # AE 3 
-  ae_path: "runs/019/epoch_1000_12.9554_13.0651.pth" # VAE 6
-  #ae_path: "runs/018/epoch_1000_12.7719_12.8772.pth" # AE 6
   
 Training:
   epochs: 1000

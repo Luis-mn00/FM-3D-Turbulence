@@ -30,7 +30,7 @@ def load_latent_model(config, model_path):
     return model
 
 def load_ae_model(config):
-    ae = AE(input_size=config_ae.Model.in_channels,
+    ae = VAE(input_size=config_ae.Model.in_channels,
                image_size=config_ae.Data.grid_size,
                hidden_size=config_ae.Model.hidden_size,
                depth=config_ae.Model.depth,
@@ -53,9 +53,9 @@ def integrate_ode_and_sample_latent(config, config_ae, model, ae, num_samples=1,
             print(f"Generating sample {_+1}/{num_samples}")
             # Initialize random sample
             xt = torch.randn((1, config_ae.Model.in_channels, config_ae.Data.grid_size, config_ae.Data.grid_size, config_ae.Data.grid_size), device=config.device)
-            zt = ae.encode(xt)
-            #mu, logvar = ae.encode(xt)
-            #zt = ae.reparameterize(mu, logvar)
+            #zt = ae.encode(xt)
+            mu, logvar = ae.encode(xt)
+            zt = ae.reparameterize(mu, logvar)
 
             for i, t in enumerate(torch.linspace(0, 1, steps, device=config.device), start=1):
                 #print(f"Step {i}/{steps}")
@@ -202,17 +202,13 @@ def test_blurriness(samples, samples_gt, config):
     print(f"Sharpness: {mean_blurriness:.4f} +/- {std_blurriness:.4f} (max: {np.max(blurriness):.4f})")
     
 def test_energy_spectrum(samples, samples_gt, config):
-    e_gt = utils.compute_energy_spectrum(samples_gt, f"energy_gt")
+    e_gt = utils.compute_energy_spectrum(samples_gt, f"energy_gt", config.device)
     
     # Ensure samples are converted to a tensor before passing to compute_energy_spectrum
     samples_tensor = torch.stack([s.squeeze(0) for s in samples])
-    e_fm = utils.compute_energy_spectrum(samples_tensor, f"energy_fm")
-    
-    # Convert e_gt and e_fm to tensors before applying torch.abs
-    e_gt_tensor = torch.tensor(e_gt, device=config.device)
-    e_fm_tensor = torch.tensor(e_fm, device=config.device)
+    e_fm = utils.compute_energy_spectrum(samples_tensor, f"energy_fm", config.device)
 
-    diff = torch.abs(e_gt_tensor - e_fm_tensor)
+    diff = torch.abs(e_gt - e_fm)
     print(f"Energy spectrum difference: {torch.mean(diff):.4e} +/- {torch.std(diff):.4e} (max: {torch.max(diff):.4e})")
 
 

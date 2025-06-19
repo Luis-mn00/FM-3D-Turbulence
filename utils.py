@@ -631,12 +631,10 @@ def movingaverage(interval, window_size):
     window = np.ones(int(window_size))/float(window_size)
     return np.convolve(interval, window, 'same')
 
-def compute_energy_spectrum(velocity, name, smooth=True):
+def compute_energy_spectrum(velocity, name, device, smooth=True):
     lx = ly = lz = 2.0*math.pi
     
-    # Convert to numpy arrays
-    if isinstance(velocity, torch.Tensor):
-        velocity = velocity.cpu().numpy()
+    velocity = velocity.to(device)
         
     N, _, nx, ny, nz = velocity.shape
     nt = nx * ny * nz
@@ -649,7 +647,7 @@ def compute_energy_spectrum(velocity, name, smooth=True):
     kxmax = nx/2
     kymax = ny/2
     kzmax = nz/2
-    wave_numbers = knorm*np.arange(0,n)
+    wave_numbers = knorm * torch.arange(0, n, device=device)
     
     spectra = []
     
@@ -658,37 +656,40 @@ def compute_energy_spectrum(velocity, name, smooth=True):
         v = velocity[i, 1]
         w = velocity[i, 2]
 
-        uh = np.fft.fftn(u) / nt
-        vh = np.fft.fftn(v) / nt
-        wh = np.fft.fftn(w) / nt
+        # Perform FFT on GPU
+        uh = torch.fft.fftn(u) / nt
+        vh = torch.fft.fftn(v) / nt
+        wh = torch.fft.fftn(w) / nt
 
-        tkeh = np.zeros((nx,ny,nz))
-        tkeh = 0.5 * (uh * np.conj(uh) + vh * np.conj(vh) + wh * np.conj(wh)).real
+        # Compute kinetic energy in Fourier space
+        tkeh = 0.5 * (uh.abs()**2 + vh.abs()**2 + wh.abs()**2)
         
-        tke_spectrum = np.zeros(len(wave_numbers))
-        for kx in range(nx):
-            rkx = kx if kx <= kxmax else kx - nx
-            for ky in range(ny):
-                rky = ky if ky <= kymax else ky - ny
-                for kz in range(nz):
-                    rkz = kz if kz <= kzmax else kz - nz
-                    rk = np.sqrt(rkx**2 + rky**2 + rkz**2)
-                    k = int(np.round(rk))
-                    tke_spectrum[k] += tkeh[kx, ky, kz]
+        # Compute wave numbers
+        kx = torch.fft.fftfreq(nx, d=1.0 / nx, device=device)
+        ky = torch.fft.fftfreq(ny, d=1.0 / ny, device=device)
+        kz = torch.fft.fftfreq(nz, d=1.0 / nz, device=device)
+        kx, ky, kz = torch.meshgrid(kx, ky, kz, indexing="ij")
+        rk = torch.sqrt(kx**2 + ky**2 + kz**2)
+        
+        # Bin energy by wave number
+        tke_spectrum = torch.zeros(len(wave_numbers), device=device)
+        for k in range(len(wave_numbers)):
+            mask = (rk >= wave_numbers[k]) & (rk < wave_numbers[k] + knorm)
+            tke_spectrum[k] = tkeh[mask].sum()
 
         tke_spectrum /= knorm
         tke_spectrum = tke_spectrum[1:]
 
         if smooth:
-            smoothed = movingaverage(tke_spectrum, 5)
-            smoothed[0:4] = tke_spectrum[0:4]
+            smoothed = torch.tensor(movingaverage(tke_spectrum.cpu().numpy(), 5), device=device)
+            smoothed[:4] = tke_spectrum[:4]
             tke_spectrum = smoothed
 
         spectra.append(tke_spectrum)
         
-    # Average over all N snapshots
-    tke_spectrum_avg = np.mean(spectra, axis=0)   
-    wave_numbers = wave_numbers[1:] 
+    # Average over all snapshots
+    tke_spectrum_avg = torch.stack(spectra).mean(dim=0)
+    wave_numbers = wave_numbers[1:]
     
     # Analytical line
     C = 1.6          
@@ -698,8 +699,8 @@ def compute_energy_spectrum(velocity, name, smooth=True):
     
     # Plot
     plt.figure(figsize=(8, 5))
-    plt.loglog(wave_numbers, tke_spectrum_avg + 1e-20)
-    plt.loglog(wave_numbers, E_k_analytic, 'k--', label=r"$1.6 \, \varepsilon^{2/3} \, k^{-5/3}$")
+    plt.loglog(wave_numbers.cpu(), tke_spectrum_avg.cpu() + 1e-20, label="Averaged TKE Spectrum")
+    plt.loglog(wave_numbers.cpu(), E_k_analytic.cpu(), 'k--', label=r"$1.6 \, \varepsilon^{2/3} \, k^{-5/3}$")
     plt.xlabel("Wavenumber $k$")
     plt.ylabel("Energy $E(k)$")
     plt.ylim(1e-7, 1)

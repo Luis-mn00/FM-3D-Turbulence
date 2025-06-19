@@ -218,7 +218,7 @@ plt.savefig("generated_plots/vy_optim.png")
 fig, ax = plt.subplots(figsize=(8, 8))
 plot_3D_field(ax=ax, data=vz_optim, cmap="PiYG")
 plt.savefig("generated_plots/vz_optim.png")
-
+"""
 
 dataset_optim = torch.load(f'data/data_spectral_128_mindiv.pt', weights_only=False, map_location='cpu')
 if isinstance(dataset_optim, np.ndarray):
@@ -227,10 +227,10 @@ if isinstance(dataset_optim, np.ndarray):
 velocity = dataset_optim[0:10, :3, :, :, :]
 print(velocity.shape)
 
-utils.compute_energy_spectrum(velocity, "energy")
+utils.compute_energy_spectrum(velocity, "energy", device="cuda:0")
 
-utils.compute_energy_spectrum_original("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", "energy_original")
-"""
+#utils.compute_energy_spectrum_original("/mnt/data4/pbdl-datasets-local/3d_jhtdb/isotropic1024coarse.hdf5", "energy_original")
+
 
 sig = [0.004, 0.008, 0.012, 0.016, 0.020, 0.024, 0.028, 0.032, 0.036, 0.040, 0.044, 0.048, 0.052, 0.056, 0.060, 0.07, 0.08]
 rmse = [0.3022, 0.3023, 0.3019, 0.3021, 0.3021, 0.3023, 0.3022, 0.3020, 0.3023, 0.3020, 0.3022, 0.3022, 0.3022, 0.3022, 0.3023, 0.3022, 0.3022]

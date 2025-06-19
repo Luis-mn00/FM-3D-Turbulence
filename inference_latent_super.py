@@ -34,7 +34,7 @@ def load_latent_model(config, model_path):
     return model
 
 def load_ae_model(config):
-    ae = AE(input_size=config_ae.Model.in_channels,
+    ae = VAE(input_size=config_ae.Model.in_channels,
                image_size=config_ae.Data.grid_size,
                hidden_size=config_ae.Model.hidden_size,
                depth=config_ae.Model.depth,
@@ -76,15 +76,15 @@ def fm_interp_sparse_experiment_latent(dataset, config, config_ae, model, ae, ns
         noise = torch.randn((1, config_ae.Model.in_channels, config_ae.Data.grid_size, config_ae.Data.grid_size, config_ae.Data.grid_size), device=config.device).float()
         # Encode to latent space
         with torch.no_grad():
-            z_lr = ae.encode(x)
-            #mu1, logvar1 = ae.encode(x)
-            #z_lr = ae.reparameterize(mu1, logvar1)
-            z_hr = ae.encode(y)
-            #mu2, logvar2 = ae.encode(y)
-            #z_hr = ae.reparameterize(mu2, logvar2)
-            z_noise = ae.encode(noise)
-            #mu3, logvar3 = ae.encode(noise)
-            #z_noise = ae.reparameterize(mu3, logvar3)
+            #z_lr = ae.encode(x)
+            mu1, logvar1 = ae.encode(x)
+            z_lr = ae.reparameterize(mu1, logvar1)
+            #z_hr = ae.encode(y)
+            mu2, logvar2 = ae.encode(y)
+            z_hr = ae.reparameterize(mu2, logvar2)
+            #z_noise = ae.encode(noise)
+            mu3, logvar3 = ae.encode(noise)
+            z_noise = ae.reparameterize(mu3, logvar3)
         # Flow matching in latent space
         z_pred = fm_interp_latent(model, z_noise, z_lr, steps=100)
         # Decode back to physical space
@@ -110,11 +110,11 @@ def fm_interp_sparse_experiment_latent(dataset, config, config_ae, model, ae, ns
         
         y = y.unsqueeze(0)
         y_pred = y_pred.unsqueeze(0)
-        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
-        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
-        diff = np.abs(e_gt - e_pred)
-        diff = np.mean(diff)
-        spectrum.append(diff)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt", config.device)
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred", config.device)
+        diff = torch.abs(e_gt - e_pred)
+        diff = torch.mean(diff)
+        spectrum.append(diff.cpu().numpy())
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})")
@@ -124,12 +124,12 @@ def fm_interp_sparse_experiment_latent(dataset, config, config_ae, model, ae, ns
     print(f"Mean energy spectrum difference: {np.mean(spectrum):.4e} +/- {np.std(spectrum):.4e} (max: {np.max(spectrum):.4e})")
 
 def fm_mask(fm_model, ae_model, x, x_lr, steps, mask):
-    z = ae_model.encode(x)
-    #mu1, logvar1 = ae.encode(x)
-    #z = ae.reparameterize(mu1, logvar1)
-    z_lr = ae_model.encode(x_lr)
-    #mu2, logvar2 = ae.encode(x_lr)
-    #z_lr = ae.reparameterize(mu2, logvar2)
+    #z = ae_model.encode(x)
+    mu1, logvar1 = ae.encode(x)
+    z = ae.reparameterize(mu1, logvar1)
+    #z_lr = ae_model.encode(x_lr)
+    mu2, logvar2 = ae.encode(x_lr)
+    z_lr = ae.reparameterize(mu2, logvar2)
 
     zt = z                              # Start FM from high-res latent
     with torch.no_grad():
@@ -151,9 +151,9 @@ def fm_mask(fm_model, ae_model, x, x_lr, steps, mask):
             x_masked = (1 - mask_t) * x1_pred + mask_t * x_lr
 
             # Re-encode to latent space
-            z_masked = ae_model.encode(x_masked)
-            #mu, logvar = ae.encode(x_masked)
-            #z_masked = ae.reparameterize(mu, logvar)
+            #z_masked = ae_model.encode(x_masked)
+            mu, logvar = ae.encode(x_masked)
+            z_masked = ae.reparameterize(mu, logvar)
 
             # Euler update step in latent space
             zt = zt + (1 / steps) * (z_masked - zt) / (1 - t)
@@ -214,11 +214,11 @@ def fm_mask_sparse_experiment_latent(dataset, config, config_ae, model, ae, nsam
         
         y = y.unsqueeze(0)
         y_pred = y_pred.unsqueeze(0)
-        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
-        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
-        diff = np.abs(e_gt - e_pred)
-        diff = np.mean(diff)
-        spectrum.append(diff)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt", config.device)
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred", config.device)
+        diff = torch.abs(e_gt - e_pred)
+        diff = torch.mean(diff)
+        spectrum.append(diff.cpu().numpy())
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
@@ -292,11 +292,11 @@ def fm_diff_mask_sparse_experiment_latent(dataset, config, config_ae, model, ae,
         
         y = y.unsqueeze(0)
         y_pred = y_pred.unsqueeze(0)
-        e_gt = utils.compute_energy_spectrum(y, "energy_gt")
-        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred")
-        diff = np.abs(e_gt - e_pred)
-        diff = np.mean(diff)
-        spectrum.append(diff)
+        e_gt = utils.compute_energy_spectrum(y, "energy_gt", config.device)
+        e_pred = utils.compute_energy_spectrum(y_pred, "energy_pred", config.device)
+        diff = torch.abs(e_gt - e_pred)
+        diff = torch.mean(diff)
+        spectrum.append(diff.cpu().numpy())
         
     print(f"Pixel-wise L2 error: {np.mean(losses):.4f} +/- {np.std(losses):.4f} (max: {np.max(losses):.4f})")
     print(f"Residual L2 norm: {np.mean(residuals):.4f} +/- {np.std(residuals):.4f} (max: {np.max(residuals):.4f})") 
@@ -347,4 +347,4 @@ if __name__ == "__main__":
     print("Generating samples (latent FM)...")
     fm_interp_sparse_experiment_latent(dataset, config, config_ae, model, ae, num_samples, samples_x, samples_y)
     fm_mask_sparse_experiment_latent(dataset, config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids)
-    fm_diff_mask_sparse_experiment_latent(dataset, config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids)
+    fm_diff_mask_sparse_experiment_latent(dataset, config, config_ae, model, ae, num_samples, samples_x, samples_y, samples_ids, sig=0.016)

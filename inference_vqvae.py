@@ -29,7 +29,7 @@ def load_model(config, model_path):
     #           res_size=config.Model.res_size,
     #           device=config.device,
     #           z_dim=config.Model.z_dim).to(config.device)
-    model = VAE(input_size=config.Model.in_channels,
+    model = AE(input_size=config.Model.in_channels,
                image_size=config.Data.grid_size,
                hidden_size=config.Model.hidden_size,
                depth=config.Model.depth,
@@ -149,17 +149,13 @@ def test_blurriness(samples, samples_gt, config):
     print(f"Sharpness: {mean_blurriness:.4f} +/- {std_blurriness:.4f}")
     
 def test_energy_spectrum(samples, samples_gt, config):
-    e_gt = utils.compute_energy_spectrum(samples_gt, f"energy_gt")
+    e_gt = utils.compute_energy_spectrum(samples_gt, f"energy_gt", config.device)
     
     # Ensure samples are converted to a tensor before passing to compute_energy_spectrum
     samples_tensor = torch.stack([s.squeeze(0) for s in samples])
-    e_fm = utils.compute_energy_spectrum(samples_tensor, f"energy_fm")
-    
-    # Convert e_gt and e_fm to tensors before applying torch.abs
-    e_gt_tensor = torch.tensor(e_gt, device=config.device)
-    e_fm_tensor = torch.tensor(e_fm, device=config.device)
+    e_fm = utils.compute_energy_spectrum(samples_tensor, f"energy_fm", config.device)
 
-    diff = torch.abs(e_gt_tensor - e_fm_tensor)
+    diff = torch.abs(e_gt - e_fm)
     print(f"Energy spectrum difference: {torch.mean(diff):.4e} +/- {torch.std(diff):.4e}")
 
 # Main script
@@ -211,8 +207,8 @@ if __name__ == "__main__":
     plt.show()
 
     print("Generating samples...")
-    #samples_ae = generate_samples(model, config, num_samples)
-    samples_ae = generate_samples_vae(model, config, num_samples)
+    samples_ae = generate_samples(model, config, num_samples)
+    #samples_ae = generate_samples_vae(model, config, num_samples)
     for i, sample in enumerate(samples_ae):
         utils.plot_slice(sample, 0, 1, 63, f"generated_sample_ae_{i}")
 
